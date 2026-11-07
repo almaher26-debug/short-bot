@@ -1,6 +1,6 @@
 # ===== بوت الشورت (Short bot) =====
 # نسخة من gap_scanner.py، والأقسام كلها مطفية إلا:
-#   (4ج) الشورت صفر اللحظي + نزول المتاح للشورت 90% (1$-10$، قيمة 1-100 مليون، من IBKR) | (7) الأخبار الإيجابية (1$-15$، القيمة 5-100 مليون) | (4د) سكنر الزخم (1$-15$) | (6) خوارزميات التقطيع | (6ج) خوارزميات البني ستوك | (2) ماسح السيولة | (4ب) قوائم التجزئة العكسية
+#   (4ج) الشورت صفر اللحظي + نزول المتاح للشورت 90% (1$-10$، قيمة 1-100 مليون، من IBKR) | (7) الأخبار الإيجابية (1$-15$، القيمة 5-100 مليون) | (4د) سكنر الزخم (1$-15$) | (6) خوارزميات التقطيع | (6ج) خوارزميات البني ستوك | (6هـ) تقطيع شراء 1000 سهم خلال 5 دقايق (1$-10$، أي حجم صفقة) | (2) ماسح السيولة | (4ب) قوائم التجزئة العكسية
 # التشغيل على Railway: python short_bot.py  (المتغيرات: TELEGRAM_TOKEN + ALPACAAPIKEY + ALPACASECRETKEY)
 """
 بوت التنبيهات - يشتغل على Railway ويرسل على تيليجرام
@@ -592,6 +592,17 @@ ALGO_PENNY_MIN_PRICE = 1
 ALGO_PENNY_MAX_PRICE = 5
 ALGO_PENNY_MAX_MARKET_CAP = 40_000_000
 ALGO_PENNY_MAX_SYMBOLS = 300          # الأنشط أول
+# ---- (6هـ) تقطيع شراء - البني ستوك: 1000 سهم شراء أو أكثر مقطّعة على صفقات (أي حجم وأي عدد) خلال 5 دقايق ----
+ALGO_BUYSLICE = os.environ.get("ALGO_BUYSLICE", "1") != "0"   # 0 = يطفي هالقسم
+ALGO_BUYSLICE_MIN_PRICE = 1
+ALGO_BUYSLICE_MAX_PRICE = 10
+ALGO_BUYSLICE_MAX_MARKET_CAP = 0          # 0 = بدون حد للقيمة السوقية
+ALGO_BUYSLICE_MAX_SYMBOLS = 300           # الأنشط أول
+ALGO_BUYSLICE_WINDOW_MIN = 5              # خلال آخر كذا دقيقة
+ALGO_BUYSLICE_MIN_SHARES = 1000           # مجموع أسهم الشراء المقطّع
+ALGO_BUYSLICE_MAX_SIZE = 0                # أكبر حجم للصفقة الوحدة (0 = أي حجم) - الأحجام تقدر تختلف
+ALGO_BUYSLICE_MIN_TRADES = 2              # أقل عدد صفقات (صفقتين وفوق = مقطّع، مو صفقة وحدة)
+ALGO_BUYSLICE_ONCE_HOURS = 24             # تنبيه واحد لكل سهم كل كذا ساعة
 
 # ---- (6ب) خوارزميات الأسهم الكبيرة: صفقات متتالية بنفس الحجم ----
 # أسهم ناسداك اللي قيمتها السوقية مليار دولار وفوق
@@ -4250,6 +4261,73 @@ def _algo_message(sym, a, cap=None, section="", note=""):
             f"وقت آخر صفقة: {a['last_t'].tz_convert(LOCAL_TZ):%H:%M:%S} (توقيتك)")
 
 
+class BuySliceDetector:
+    """(6هـ) يجمع صفقات الشراء الصغيرة اللي بنفس الحجم خلال آخر ALGO_BUYSLICE_WINDOW_MIN دقيقة لكل سهم.
+    الشراء يتقدّر من اتجاه السعر (نفس طريقة (6)): صفقة أعلى من اللي قبلها = شراء."""
+    def __init__(self):
+        self.win, self.seen, self.last_px, self.last_side = {}, {}, {}, {}
+
+    def add(self, sym, trade):
+        tid = trade.get("i")
+        seen = self.seen.setdefault(sym, deque(maxlen=50000))
+        if tid is not None:
+            if tid in seen:
+                return None
+            seen.append(tid)
+        size = float(trade.get("s") or 0)
+        price = float(trade.get("p") or 0)
+        if size <= 0 or price <= 0:
+            return None
+        prev = self.last_px.get(sym)
+        side = self.last_side.get(sym, 0)
+        if prev is not None and price != prev:
+            side = 1 if price > prev else -1
+        self.last_px[sym], self.last_side[sym] = price, side
+        if side <= 0 or (ALGO_BUYSLICE_MAX_SIZE and size > ALGO_BUYSLICE_MAX_SIZE):
+            return None
+        ts = pd.Timestamp(trade["t"])
+        q = self.win.setdefault(sym, deque())
+        q.append((ts, price, size))
+        cutoff = ts - pd.Timedelta(minutes=ALGO_BUYSLICE_WINDOW_MIN)
+        while q and q[0][0] < cutoff:
+            q.popleft()
+        shares = sum(x[2] for x in q)
+        if shares < ALGO_BUYSLICE_MIN_SHARES or len(q) < ALGO_BUYSLICE_MIN_TRADES:
+            return None
+        prices = [x[1] for x in q]
+        sizes = [x[2] for x in q]
+        res = {"count": len(q), "shares": shares, "first_t": q[0][0], "last_t": ts,
+               "low": min(prices), "high": max(prices), "last": price,
+               "value": sum(x[1] * x[2] for x in q), "min_size": min(sizes), "max_size": max(sizes)}
+        q.clear()                                   # يبدأ العد من جديد بعد التنبيه
+        return res
+
+
+def _buyslice_message(sym, a, cap=None, section="", note=""):
+    mins = max((a["last_t"] - a["first_t"]).total_seconds() / 60, 0.1)
+    return (f"🟢🤖 تقطيع شراء — {section}\n"
+            f"السهم: ${sym}\n"
+            f"السعر: ${a['last']:.4g} (من {a['low']:.4g} إلى {a['high']:.4g})\n"
+            f"الشراء المقطّع: {a['shares']:,.0f} سهم على {a['count']:,} صفقة\n"
+            f"حجم الصفقة: من {a['min_size']:,.0f} إلى {a['max_size']:,.0f} سهم\n"
+            f"القيمة: ${a['value']:,.0f}\n"
+            f"المدة: {mins:.1f} دقيقة\n"
+            + (f"القيمة السوقية: {_cap_txt(cap)}\n" if cap else "")
+            + f"المصدر: {ALGO_FEED.upper()} عبر Alpaca (الشراء تقدير من اتجاه السعر)\n"
+            f"وقت آخر صفقة: {a['last_t'].tz_convert(LOCAL_TZ):%H:%M:%S} (توقيتك)")
+
+
+def get_buyslice_universe():
+    """(6هـ): ناسداك من ALGO_BUYSLICE_MIN_PRICE إلى ALGO_BUYSLICE_MAX_PRICE، الأنشط أول."""
+    try:
+        return {sym: (cap, "") for sym, cap in _price_universe(
+            ALGO_BUYSLICE_MIN_PRICE, ALGO_BUYSLICE_MAX_PRICE, ALGO_BUYSLICE_MAX_MARKET_CAP,
+            ALGO_BUYSLICE_MAX_SYMBOLS)}
+    except Exception as e:
+        log("تقطيع الشراء: ما قدرت أجيب قائمة الأسهم -", e)
+        return {}
+
+
 FLOAT_CACHE_SEC = 6 * 60 * 60    # تحديث بيانات الفلوت كل 6 ساعات (يستخدمها ماسح السيولة)
 _algo_float_cache = {}
 
@@ -4391,12 +4469,14 @@ def _once_load(tag):
     return out
 
 
-def algo_loop(name, section, get_universe, fixed=None, exclude=None, once_hours=0):
+def algo_loop(name, section, get_universe, fixed=None, exclude=None, once_hours=0,
+              det_cls=None, msg_fn=None):
     """يشتغل بخيط لحاله في الخلفية، عشان ما يتأخر بسبب الفحوصات الثانية الطويلة.
     get_universe يرجع {الرمز: (القيمة السوقية، ملاحظة)} - تتجدد مرة باليوم.
     exclude = دالة ترجع أسهم ما نراقبها هنا (موجودة بقسم ثاني).
     once_hours = تنبيه واحد بس لكل سهم، وبعدها يسكت عنه كذا ساعة (0 = بدون حد)."""
-    det = AlgoDetector()
+    det = (det_cls or AlgoDetector)()
+    msg_fn = msg_fn or _algo_message
     once_tag = section
     once_last = _once_load(once_tag) if once_hours else {}
     last_end = None
@@ -4453,7 +4533,7 @@ def algo_loop(name, section, get_universe, fixed=None, exclude=None, once_hours=
                                 once_last[sym] = now_utc
                                 _append_line(ALGO_ONCE_FILE, f"{once_tag}|{sym}|{now_utc.isoformat()}")
                             cap, note = caps.get(sym, (None, ""))
-                            send_telegram(_algo_message(sym, res, cap, section, note), kind="algo", sym=sym)
+                            send_telegram(msg_fn(sym, res, cap, section, note), kind="algo", sym=sym)
         except Exception as e:
             log(f"{name}: خطأ -", e)
         time.sleep(ALGO_POLL_SEC)
@@ -4675,6 +4755,12 @@ def start_algo_thread():
         threading.Thread(target=algo_loop, daemon=True, name="algo_penny",
                          args=("خوارزميات البني ستوك", sec, get_pennies, None,
                                lambda: RSPLIT_ALGO_SYMS, ALGO_PENNY_ONCE_HOURS)).start()
+    if ALGO_BUYSLICE:
+        sec = (f"تقطيع شراء بني ستوك {ALGO_BUYSLICE_MIN_PRICE:g}$-{ALGO_BUYSLICE_MAX_PRICE:g}$")
+        threading.Thread(target=algo_loop, daemon=True, name="algo_buyslice",
+                         args=("تقطيع الشراء", sec, get_buyslice_universe, None, None,
+                               ALGO_BUYSLICE_ONCE_HOURS),
+                         kwargs={"det_cls": BuySliceDetector, "msg_fn": _buyslice_message}).start()
     if ALGO_BIG:
         threading.Thread(target=algo_big_loop, daemon=True, name="algo_big").start()
 
@@ -5370,7 +5456,7 @@ def main():
     log(f"التنبيهات بتروح لـ {len(CHATS)} محادثة: {', '.join(CHATS) or 'ولا وحدة'}")
     if TEST_ON_START and not once:
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
-                      "الأقسام: الشورت صفر اللحظي + نزول المتاح للشورت 90% + الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك + ماسح السيولة + التجزئة العكسية\n"
+                      "الأقسام: الشورت صفر اللحظي + نزول المتاح للشورت 90% + الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك + تقطيع الشراء + ماسح السيولة + التجزئة العكسية\n"
                       f"الوقت: {pd.Timestamp.now(tz=LOCAL_TZ):%Y-%m-%d %H:%M} (توقيتك)")
     if not once:
         start_algo_thread()

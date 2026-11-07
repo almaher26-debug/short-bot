@@ -1,7 +1,7 @@
 # ===== بوت الشورت (Short bot) =====
 # نسخة من gap_scanner.py، والأقسام كلها مطفية إلا:
-#   (4) الشورت صفر | (4ج) الشورت صفر اللحظي
-# التشغيل على Railway: python short_bot.py  (المتغير: TELEGRAM_TOKEN)
+#   (4) الشورت صفر | (4ج) الشورت صفر اللحظي | (7) الأخبار الإيجابية (1$-15$، القيمة 5-100 مليون) | (4د) سكنر الزخم (1$-15$) | (6ج) خوارزميات البني ستوك
+# التشغيل على Railway: python short_bot.py  (المتغيرات: TELEGRAM_TOKEN + ALPACAAPIKEY + ALPACASECRETKEY)
 """
 بوت التنبيهات - يشتغل على Railway ويرسل على تيليجرام
 =====================================================
@@ -440,7 +440,7 @@ BZ_DROP_MIN_BASE = 1_000         # يتجاهل الأسهم اللي أعلى �
 BZ_DROP_CHAT = os.environ.get("TELEGRAM_CHAT_ID_SHORT", "").strip()
 
 # ---- (4د) سكنر الزخم: ارتفاع قوي + فوليوم نسبي + قريب من قمة اليوم (Alpaca، كل دقيقة) ----
-ENABLE_MOMENTUM = False  # True = شغال | False = مطفي
+ENABLE_MOMENTUM = True  # True = شغال | False = مطفي
 MOM_MIN_PRICE = 1                # أقل سعر
 MOM_MAX_PRICE = 15               # أعلى سعر (كان 10)
 MOM_MIN_CHANGE = 10              # أقل ارتفاع % عن إغلاق أمس
@@ -548,7 +548,7 @@ ALPACA_KEY = (os.environ.get("ALPACAAPIKEY") or os.environ.get("ALPACA_API_KEY")
               or os.environ.get("APCA_API_KEY_ID", ""))
 ALPACA_SECRET = (os.environ.get("ALPACASECRETKEY") or os.environ.get("ALPACA_SECRET_KEY")
                  or os.environ.get("APCA_API_SECRET_KEY", ""))
-ENABLE_ALGO = False  # يتفعل لحاله لو المفاتيح موجودة
+ENABLE_ALGO = bool(ALPACA_KEY and ALPACA_SECRET)  # يتفعل لحاله لو المفاتيح موجودة
 # مصدر بيانات الجلسة الليلية لفريم 4 ساعات: Tiingo أول لو موجود، وإلا ألباكا
 NIGHT_SOURCE = "tiingo" if TIINGO_TOKEN else ("alpaca" if ENABLE_ALGO else "")
 # sip = كل البورصات (لحظي بالباقة المدفوعة، متأخر 15 دقيقة بالمجانية) | iex = بورصة وحدة صغيرة
@@ -560,7 +560,7 @@ ALGO_DELAY_MIN = int(os.environ.get("ALGO_DELAY_MIN", "0"))
 # الأسهم: تلقائياً أسهم ناسداك اللي سعرها من 1$ إلى 15$ وسوت تجزئة عكسية خلال آخر 3 شهور
 # ولو تبي قائمة ثابتة حطها في Railway بمتغير ALGO_SYMBOLS (بينها فاصلة)
 ALGO_SYMBOLS = [s.strip().upper() for s in os.environ.get("ALGO_SYMBOLS", "").split(",") if s.strip()]
-ALGO_SMALL = os.environ.get("ALGO_SMALL", "1") != "0"   # 0 = يطفي هالقسم
+ALGO_SMALL = False   # 0 = يطفي هالقسم
 ALGO_MIN_PRICE = 1                    # أقل سعر سهم
 ALGO_MAX_PRICE = 15                   # أعلى سعر سهم
 ALGO_MAX_MARKET_CAP = 0               # 0 = بدون شرط قيمة سوقية
@@ -591,7 +591,7 @@ ALGO_PENNY_MAX_SYMBOLS = 300          # الأنشط أول
 # أسهم ناسداك اللي قيمتها السوقية مليار دولار وفوق
 # ينبه لما تجي 600 صفقة أو أكثر ورا بعض بنفس الحجم بالضبط، وما بينها ولا صفقة بحجم ثاني
 # الأحجام الصغيرة بس: 10 أسهم وأقل (1، 1، 1 ... أو 5، 5، 5 ...)
-ALGO_BIG = os.environ.get("ALGO_BIG", "1") != "0"      # 0 = يطفي هالقسم
+ALGO_BIG = False      # 0 = يطفي هالقسم
 ALGO_BIG_MIN_MARKET_CAP = 1_000_000_000   # مليار دولار وفوق
 ALGO_BIG_MIN_STREAK = 300                 # أقل عدد صفقات متتالية بنفس الحجم
 ALGO_BIG_MAX_SIZE = 1                     # حجم الصفقة: سهم واحد بس (1، 1، 1...)
@@ -608,7 +608,7 @@ ALGO_BIG_REALERT_MIN = 15                 # ما يعيد التنبيه لنف�
 # ---- (6د) الآيس بيرغ: صفقات متتالية بنفس الحجم ونفس السعر بالضبط ----
 # نفس أسهم (6ب) (ناسداك مليار وفوق) ونفس الصفقات اللي تنسحب لها، فما يزيد طلبات على ألباكا
 # مثال: 1، 1، 1 ... (من سهم إلى 10 أسهم) كلها على نفس السعر ورا بعض، وما بينها ولا صفقة ثانية
-ALGO_ICE = os.environ.get("ALGO_ICE", "1") != "0"      # 0 = يطفي هالقسم (يشتغل لو (6ب) شغال)
+ALGO_ICE = False      # 0 = يطفي هالقسم (يشتغل لو (6ب) شغال)
 ALGO_ICE_MIN_STREAK = 500                 # أقل عدد صفقات متتالية
 ALGO_ICE_MIN_SIZE = 1                     # أقل حجم للصفقة: سهم واحد
 ALGO_ICE_MAX_SIZE = 10                    # أعلى حجم للصفقة: 10 أسهم
@@ -617,7 +617,7 @@ ALGO_ICE_REALERT_MIN = 5                  # ما يعيد التنبيه لنف�
 
 # ---- (7) الأخبار الإيجابية - من ألباكا (نفس المفاتيح) ----
 # اندماج، استحواذ، موافقة FDA، عقود وشراكات، نتائج قوية، رفع توقعات، ترقية، إعادة شراء ...
-NEWS = False  # 0 = يطفي هالقسم
+NEWS = os.environ.get("NEWS", "1") != "0"  # 0 = يطفي هالقسم
 NEWS_POLL_SEC = 60                    # كل كم ثانية يسحب الأخبار الجديدة (24 ساعة، كل الأيام)
 NEWS_MAX_AGE_MIN = 30                 # يتجاهل الخبر اللي عمره أكثر من كذا دقيقة (عشان ما يرسل قديم أول ما يشتغل)
 NEWS_MAX_SYMBOLS = 3                  # يتجاهل الخبر اللي فيه أكثر من كذا سهم (ملخصات السوق العامة)
@@ -5306,7 +5306,7 @@ def main():
     log(f"التنبيهات بتروح لـ {len(CHATS)} محادثة: {', '.join(CHATS) or 'ولا وحدة'}")
     if TEST_ON_START and not once:
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
-                      "الأقسام: الشورت صفر + الشورت صفر اللحظي\n"
+                      "الأقسام: الشورت صفر + الشورت صفر اللحظي + الأخبار + الزخم + خوارزميات البني ستوك\n"
                       f"الوقت: {pd.Timestamp.now(tz=LOCAL_TZ):%Y-%m-%d %H:%M} (توقيتك)")
     if not once:
         start_algo_thread()

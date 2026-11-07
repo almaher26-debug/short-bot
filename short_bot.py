@@ -974,7 +974,7 @@ def send_telegram(text, kind=None, sym=None):
         text = text.replace(f"${code}", f"{name} ({code})")
     if ADD_EDUCATION and kind in EDUCATION:
         text += "\n\n" + EDUCATION[kind]
-    if ADD_DISCLAIMER:
+    if ADD_DISCLAIMER and "ليست توصية" not in text:
         text += "\n\n" + DISCLAIMER
     log(text)
     if "ضع_" in TELEGRAM_TOKEN:
@@ -4113,6 +4113,282 @@ def rsplit_job(state, new_sent, short_sent, force=False):
     free_memory()
 
 
+# ================== (11) سحب قمة الجمعة يوم الاثنين ثم سحب دعم الأسبوع السابق (فريم 4 ساعات) → كول ==================
+#   1) يوم الاثنين: السعر يسحب قمة الجمعة (ذيل فوقها) ويرجع يختبرها وما يخترقها (ولا شمعة 4 ساعات تقفل فوقها)
+#   2) بعدها ينزل لقاع الأسبوع السابق (الدعم) ويسحب السيولة: شمعة 4 ساعات ذيلها تحت الدعم وإغلاقها فوقه
+#   3) التنبيه: كول، الأهداف (قمة الجمعة ثم قمة الاثنين)، الوقف تحت شمعة السحب، وعقد كول مدته أسبوعين
+#   الأسهم: القائمة الموحدة (WATCH_SYMBOLS) اللي سعرها 100$-400$
+ENABLE_FRIMON = True             # True = شغال | False = مطفي
+FRIMON_MIN_PRICE = 100
+FRIMON_MAX_PRICE = 400
+FRIMON_OPT_DTE = 14              # مدة العقد: أسبوعين (يختار أقرب انتهاء لـ 14 يوم)
+FRIMON_OPT_MIN_DTE = 10          # يدوّر بين 10 و18 يوم
+FRIMON_OPT_MAX_DTE = 18
+FRIMON_OPT_MIN_VOLUME = 300      # حجم التداول في العقد فوق 300
+FRIMON_OPT_MIN_OI = 1000         # العقود المفتوحة (الكمية غير إغلاق المركز) فوق 1000
+FRIMON_OPT_MIN_DELTA = 0.15      # الدلتا فوق 0.1500
+FRIMON_SCAN_AFTER_MIN = 3        # يفحص بعد إغلاق شمعة 4 ساعات بكم دقيقة (1:30 و 4:00 العصر نيويورك)
+FRIMON_SCAN_WINDOW_MIN = 40
+FRIMON_TEST_ID = "1"             # رسالة تجريبية مرة وحدة بعد الرفع — غيّر الرقم لو تبي وحدة ثانية
+FRIMON_SENT_FILE = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "frimon_sent.txt")
+
+
+def frimon_resistance_above(daily, this_wk, level, bars=2):
+    """أقرب مقاومة يومية فوق المستوى: قمة شمعة يومية أعلى من الشمعتين قبلها والشمعتين بعدها
+    (قبل الأسبوع الحالي). يرجع السعر أو None."""
+    d = daily[[pd.Timestamp(i).date() < this_wk for i in daily.index]]
+    hi = d["High"].astype(float).tolist()
+    piv = [hi[i] for i in range(bars, len(hi) - bars)
+           if hi[i] >= max(hi[i - bars:i]) and hi[i] >= max(hi[i + 1:i + 1 + bars])]
+    above = [h for h in piv if h > level * 1.002]
+    return min(above) if above else None
+
+
+def frimon_check(daily, c4, now):
+    """daily = شموع يومية (آخر شهر)، c4 = شموع 4 ساعات (mkt4h_candles)، now = الوقت (نيويورك).
+    يرجع تفاصيل النموذج لو تحقق على آخر شمعة 4 ساعات مقفلة، وإلا None."""
+    if daily is None or daily.empty or c4 is None or c4.empty:
+        return None
+    this_wk = _week_start(now).date()
+    prev_wk = this_wk - timedelta(days=7)
+    pw = _prev_week_rows(daily, prev_wk, this_wk)
+    if pw.empty:
+        return None
+    fri = pw.iloc[-1]                                   # آخر يوم بالأسبوع السابق (الجمعة)
+    fh, fri_day = float(fri["High"]), pd.Timestamp(pw.index[-1]).date()
+    lows = pw["Low"].astype(float)
+    pwl, pwl_day = float(lows.min()), pd.Timestamp(lows.idxmin()).date()
+
+    c = c4[(c4["end"] <= now).values]                   # الشموع المقفلة بس
+    days = pd.Series([pd.Timestamp(i).date() for i in c.index], index=c.index)
+    c = c[(days >= this_wk).values]
+    if len(c) < 2:
+        return None
+    first_day = min(pd.Timestamp(i).date() for i in c.index)
+    if first_day.weekday() != 0:                        # لازم يوم الاثنين موجود (مو عطلة)
+        return None
+    cdays = [pd.Timestamp(i).date() for i in c.index]
+    mon = c[[d == first_day for d in cdays]]
+    if mon.empty or float(mon["High"].max()) <= fh:     # 1) سحب قمة الجمعة يوم الاثنين
+        return None
+    mon_high = float(mon["High"].max())
+    sweep_i = list(c.index).index(mon["High"].astype(float).idxmax())
+    # إعادة اختبار وعدم اختراق: ولا شمعة من الاثنين لين الحين قفلت فوق قمة الجمعة
+    if (c["Close"].astype(float) > fh).any():
+        return None
+    sig = c.iloc[-1]                                    # 2) آخر شمعة مقفلة = شمعة سحب الدعم
+    if len(c) - 1 <= sweep_i:
+        return None                                     # لازم بعد سحب القمة
+    lo, cl = float(sig["Low"]), float(sig["Close"])
+    if not (lo < pwl < cl):
+        return None
+    # أول سحب للدعم بعد سحب القمة (ما نعيد على شمعة ثانية)
+    mid = c.iloc[sweep_i + 1:-1]
+    if (mid["Low"].astype(float) < pwl).any():
+        return None
+    if not (FRIMON_MIN_PRICE <= cl <= FRIMON_MAX_PRICE):
+        return None
+    pwh = float(pw["High"].astype(float).max())
+    near = frimon_resistance_above(daily, this_wk, fh)
+    cands = [("مقاومة الجمعة", fh), ("قمة الأسبوع السابق", pwh)]
+    if near:
+        cands.insert(1, ("أقرب مقاومة يومية فوقها", near))
+    targets = []
+    for name, px in sorted(cands, key=lambda x: x[1]):
+        if px > cl and (not targets or px - targets[-1][1] > cl * 0.002):
+            targets.append((name, px))
+    if not targets:
+        return None
+    return {"fh": fh, "fri_day": fri_day, "pwl": pwl, "pwl_day": pwl_day, "mon_high": mon_high,
+            "entry": cl, "stop": lo, "sig_start": c.index[-1], "sig_end": sig["end"], "targets": targets}
+
+
+def _frimon_opt_px(c, spot, new_spot):
+    """سعر العقد التقديري لو السهم راح لـ new_spot (بلاك شولز بنفس IV، بدون حساب مرور الوقت)."""
+    exp, k, delta, bid, ask, sym, iv, gamma = c[:8]
+    mid = (bid + ask) / 2 if bid else ask
+    yrs = _opt_years(exp)
+    p0, p1 = _bs_price(spot, k, yrs, iv, False), _bs_price(new_spot, k, yrs, iv, False)
+    if p0 is not None and p1 is not None:
+        px = mid + (p1 - p0)
+    else:
+        ds = new_spot - spot
+        px = mid + delta * ds + 0.5 * (gamma or 0) * ds * ds
+    return max(round(px, 2), 0.01), mid
+
+
+def frimon_pick_option(t, spot):
+    """عقد كول: أقرب انتهاء لأسبوعين، حجم فوق 300، عقود مفتوحة فوق 1000، دلتا فوق 0.15.
+    يرجع (العقد، الحجم، العقود المفتوحة) أو None."""
+    today = pd.Timestamp.now(tz=NY).date()
+    d1, d2 = today + timedelta(days=FRIMON_OPT_MIN_DTE), today + timedelta(days=FRIMON_OPT_MAX_DTE)
+    ok = []
+    for x in _pdr1h_option_rows(t, False, spot, d1, d2):
+        exp, k, delta, bid, ask, sym, iv, gamma, vol, src = x
+        if delta is None or delta <= FRIMON_OPT_MIN_DELTA or not ask:
+            continue
+        if (vol or 0) <= FRIMON_OPT_MIN_VOLUME:
+            continue
+        ok.append(x)
+    if not ok:
+        return None
+    target = today + timedelta(days=FRIMON_OPT_DTE)
+    exp = min({x[0] for x in ok}, key=lambda e: abs((e - target).days))
+    cands = sorted((x for x in ok if x[0] == exp), key=lambda x: x[2])   # الأرخص (أقل دلتا) أول
+    for x in cands:
+        oi = _opt_open_interest(t, x) or 0
+        if oi > FRIMON_OPT_MIN_OI:
+            return x, x[8], oi
+    return None
+
+
+def frimon_message(t, r, opt):
+    entry, stop = r["entry"], r["stop"]
+    risk = entry - stop
+    lines = [f"🟢 كول — سحب قمة الجمعة ثم سحب دعم الأسبوع السابق (فريم 4 ساعات)",
+             f"السهم: ${t}{sec_tag(t, ' — ')}",
+             f"قمة الجمعة ({r['fri_day']:%m-%d}): {r['fh']:.2f} ← انسحبت يوم الاثنين ({r['mon_high']:.2f}) وما انخترقت",
+             f"دعم الأسبوع السابق ({r['pwl_day']:%m-%d}): {r['pwl']:.2f} ← انسحب والإغلاق فوقه",
+             f"شمعة السحب: {r['sig_start'].tz_convert(LOCAL_TZ):%m-%d %H:%M} (توقيتك)",
+             "",
+             f"🛑 وقف الخسارة: {stop:.2f} (تحت شمعة سحب الدعم) — {risk / entry * 100:.1f}%"]
+    for i, (name, px) in enumerate(r["targets"], 1):
+        lines.append(f"🎯 الهدف {i}: {px:.2f} — +{(px / entry - 1) * 100:.1f}%"
+                     + (f" | {(px - entry) / risk:.1f}R" if risk > 0 else ""))
+    lines.append("")
+    if opt:
+        c, vol, oi = opt
+        exp, k, delta, bid, ask, sym, iv = c[:7]
+        days = (exp - pd.Timestamp.now(tz=NY).date()).days
+        stop_px, mid = _frimon_opt_px(c, entry, stop)
+        lines += [f"📄 العقد: {t} كول {k:g} — انتهاء {exp:%Y-%m-%d} ({days} يوم)",
+                  f"السعر الحين: {mid:.2f}$ (العقد كامل {mid * 100:,.0f}$) | بيد {bid or 0:.2f} / أسك {ask:.2f}",
+                  f"الدلتا: {delta:.4f}" + (f" | IV: {iv * 100:.0f}%" if iv else ""),
+                  f"حجم التداول: {int(vol):,} | العقود المفتوحة: {int(oi):,}",
+                  f"🛑 وقف العقد: {stop_px:.2f}$ ({(stop_px / mid - 1) * 100:+.0f}%) لو السهم وصل {stop:.2f}"]
+        for i, (name, px) in enumerate(r["targets"], 1):
+            tp, _ = _frimon_opt_px(c, entry, px)
+            lines.append(f"🎯 العقد عند الهدف {i} ({px:.2f}): تقريباً {tp:.2f}$ ({(tp / mid - 1) * 100:+.0f}%)")
+        lines.append("(أسعار العقد عند الوقف والأهداف تقديرية — بلاك شولز بنفس IV، وما تحسب مرور الوقت)")
+    else:
+        lines.append(f"📄 العقد: ما لقيت كول بالشروط (أسبوعين، حجم فوق {FRIMON_OPT_MIN_VOLUME}، "
+                     f"عقود مفتوحة فوق {FRIMON_OPT_MIN_OI:,}، دلتا فوق {FRIMON_OPT_MIN_DELTA:.4f})")
+    lines += ["", "⚠️ ليست توصية بيع أو شراء — للتعليم والتداول الوهمي فقط."]
+    return "\n".join(lines)
+
+
+def frimon_scan(symbols, sent, now=None):
+    now = now or pd.Timestamp.now(tz=NY)
+    wk = f"{now.isocalendar()[0]}-W{now.isocalendar()[1]:02d}"
+    daily = {t: df for t, df in download_batches(symbols, 100, period="6mo", interval="1d", prepost=False)}
+    cands = [t for t, df in daily.items()
+             if FRIMON_MIN_PRICE * 0.9 <= float(df["Close"].iloc[-1]) <= FRIMON_MAX_PRICE * 1.1
+             and f"{t}-{wk}" not in sent]
+    hits = 0
+    for t, df in download_batches(cands, 50, period="10d", interval="30m", prepost=False):
+        try:
+            r = frimon_check(daily[t], mkt4h_candles(df), now)
+            if not r:
+                continue
+            key = f"{t}-{wk}"
+            sent.add(key)
+            _append_line(FRIMON_SENT_FILE, key)
+            opt = None
+            try:
+                opt = frimon_pick_option(t, r["entry"])
+            except Exception as e:
+                log(f"سحب الجمعة/الاثنين: {t}: العقد: {e}")
+            send_telegram(frimon_message(t, r, opt), kind="frimon")
+            hits += 1
+        except Exception as e:
+            log(f"سحب الجمعة/الاثنين: {t}: {e}")
+    log(f"[{datetime.now():%H:%M}] سحب الجمعة/الاثنين: فحص {len(cands)} سهم — {hits} تنبيه")
+    free_memory()
+
+
+def frimon_send_test_once():
+    """يرسل تنبيه تجريبي للقسم مرة وحدة (يتذكرها في /data عشان ما تتكرر مع كل تشغيل)."""
+    marker = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "frimon_test_sent.txt")
+    try:
+        with open(marker, encoding="utf-8") as f:
+            if f.read().strip() == FRIMON_TEST_ID:
+                return
+    except Exception:
+        pass
+    tz = NY
+    now = pd.Timestamp.now(tz=tz)
+    r = {"fh": 156.00, "fri_day": (now - pd.Timedelta(days=5)).date(), "pwl": 147.50,
+         "pwl_day": (now - pd.Timedelta(days=8)).date(), "mon_high": 157.20, "entry": 148.40,
+         "stop": 147.00, "sig_start": now.floor("h"),
+         "targets": [("مقاومة الجمعة", 156.00), ("أقرب مقاومة يومية فوقها", 159.40), ("قمة الأسبوع السابق", 161.80)]}
+    exp = (now + pd.Timedelta(days=14)).date()
+    fake = (exp, 155.0, 0.32, 1.80, 1.95, "TEST", 0.38, 0.03, 850, "test")
+    send_telegram("🧪 رسالة تجريبية - هذا مو تنبيه حقيقي (السهم والأرقام وهمية)\n\n"
+                  + frimon_message("TEST", r, (fake, 850, 2400))
+                  + "\n\nلو وصلتك هالرسالة، تنبيهات القسم الحقيقية بتوصل لنفس المكان.", kind="frimon")
+    try:
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write(FRIMON_TEST_ID)
+    except Exception as e:
+        log(f"سحب الجمعة/الاثنين: ما قدرت أحفظ علامة الرسالة التجريبية: {e}")
+
+
+def frimon_run_forever():
+    frimon_send_test_once()
+    sent = _load_set(FRIMON_SENT_FILE)
+    done = set()
+    symbols = stocks_only(WATCH_SYMBOLS)
+    log(f"سحب الجمعة/الاثنين (4 ساعات): بدأ — {len(symbols)} سهم من القائمة، السعر {FRIMON_MIN_PRICE}$-{FRIMON_MAX_PRICE}$")
+    while True:
+        try:
+            now = pd.Timestamp.now(tz=NY)
+            if now.weekday() < 5:
+                for end_m in (_MKT4H_SPLIT, _MKT4H_END):
+                    end = now.normalize() + pd.Timedelta(minutes=end_m)
+                    key = f"{now.date()}-{end_m}"
+                    if (key not in done and end + pd.Timedelta(minutes=FRIMON_SCAN_AFTER_MIN) <= now
+                            <= end + pd.Timedelta(minutes=FRIMON_SCAN_WINDOW_MIN)):
+                        done.add(key)
+                        frimon_scan(symbols, sent, now)
+        except Exception as e:
+            log(f"سحب الجمعة/الاثنين: خطأ {e}")
+        time.sleep(60)
+
+
+def frimon_self_test():
+    """python short_bot.py --frimontest — يجرب النموذج على بيانات وهمية بدون نت."""
+    tz = NY
+    days = pd.to_datetime(["2026-10-15", "2026-10-16", "2026-10-19", "2026-10-20", "2026-10-21",
+                           "2026-10-22", "2026-10-23",
+                           "2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30"]).tz_localize(tz)
+    daily = pd.DataFrame({"Open":  [155, 156, 157, 158, 157, 156, 156, 158, 152, 151, 153, 154],
+                          "High":  [156, 157, 159.4, 158, 157.5, 157, 158, 161.8, 154, 152, 155, 156],
+                          "Low":   [154, 155, 156, 156, 155, 155, 155, 151, 147.5, 149, 150, 152],
+                          "Close": [156, 157, 158, 157, 156, 156, 157, 152, 151, 151, 154, 155]}, index=days)
+    rows = []   # (اليوم، بداية الشمعة، O,H,L,C)
+    data = [("2026-11-02", "09:30", 155, 157.2, 154.5, 155.5),   # الاثنين: سحب قمة الجمعة 156
+            ("2026-11-02", "13:30", 155.5, 156.3, 153, 153.5),   # إعادة اختبار وما قفل فوقها
+            ("2026-11-03", "09:30", 153.5, 154, 150, 150.5),
+            ("2026-11-03", "13:30", 150.5, 151, 148.5, 149),
+            ("2026-11-04", "09:30", 149, 150, 147.0, 148.4)]     # سحب دعم 147.5 والإغلاق فوقه
+    for d, h, o, hi, lo, cl in data:
+        st = pd.Timestamp(f"{d} {h}").tz_localize(tz)
+        end = st + (pd.Timedelta(hours=4) if h == "09:30" else pd.Timedelta(minutes=150))
+        rows.append((st, o, hi, lo, cl, end))
+    c4 = pd.DataFrame([{"Open": o, "High": hi, "Low": lo, "Close": cl, "end": e, "n": 8, "need": 8}
+                       for st, o, hi, lo, cl, e in rows], index=[r[0] for r in rows])
+    now = pd.Timestamp("2026-11-04 13:35").tz_localize(tz)
+    r = frimon_check(daily, c4, now)
+    print("النموذج:", "✅ تحقق" if r else "❌ ما تحقق")
+    if r:
+        fake = (pd.Timestamp("2026-11-18").date(), 155.0, 0.32, 1.80, 1.95, "TEST261118C00155000",
+                0.38, 0.03, 850, "test")
+        print(frimon_message("TEST", r, (fake, 850, 2400)))
+    # لو شمعة قفلت فوق قمة الجمعة → ما ينبه
+    c4b = c4.copy(); c4b.iloc[1, c4b.columns.get_loc("Close")] = 156.5
+    print("إغلاق فوق قمة الجمعة:", "❌ ما ينبه (صح)" if not frimon_check(daily, c4b, now) else "⚠️ نبه (غلط)")
+
+
 # ================== (6) كشف خوارزميات التنفيذ - ألباكا ==================
 from collections import deque
 
@@ -5440,6 +5716,9 @@ def main():
     if "--mkt4htest" in sys.argv:
         mkt4h_self_test()
         return
+    if "--frimontest" in sys.argv:
+        frimon_self_test()
+        return
     if "--pdrtest" in sys.argv:
         pdr_self_test()
         return
@@ -5456,7 +5735,7 @@ def main():
     log(f"التنبيهات بتروح لـ {len(CHATS)} محادثة: {', '.join(CHATS) or 'ولا وحدة'}")
     if TEST_ON_START and not once:
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
-                      "الأقسام: الشورت صفر اللحظي + نزول المتاح للشورت 90% + الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك + تقطيع الشراء + ماسح السيولة + التجزئة العكسية\n"
+                      "الأقسام: الشورت صفر اللحظي + نزول المتاح للشورت 90% + الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك + تقطيع الشراء + ماسح السيولة + سحب الجمعة/الاثنين (كول) + التجزئة العكسية\n"
                       f"الوقت: {pd.Timestamp.now(tz=LOCAL_TZ):%Y-%m-%d %H:%M} (توقيتك)")
     if not once:
         start_algo_thread()
@@ -5465,6 +5744,8 @@ def main():
             threading.Thread(target=mkt4h_run_forever, daemon=True, name="mkt4h").start()
         if ENABLE_EARN:          # (10) إعلانات أرباح الأسبوع القادم - كل جمعة
             threading.Thread(target=earn_run_forever, daemon=True, name="earnings").start()
+        if ENABLE_FRIMON:        # (11) سحب قمة الجمعة/الاثنين + دعم الأسبوع السابق → كول
+            threading.Thread(target=frimon_run_forever, daemon=True, name="frimon").start()
         if ENABLE_MOMENTUM:      # سكنر الزخم
             threading.Thread(target=mom_run_forever, daemon=True, name="momentum").start()
         if ENABLE_BORROW_ZERO:   # الشورت صفر اللحظي

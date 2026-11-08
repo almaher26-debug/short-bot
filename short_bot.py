@@ -445,6 +445,15 @@ BZ_DROP_MIN_BASE = 1_000         # يتجاهل الأسهم اللي أعلى �
 #   قروب عادي: -1001234567890    |   موضوع داخل قروب (Topics): -1001234567890:5
 BZ_DROP_CHAT = os.environ.get("TELEGRAM_CHAT_ID_SHORT", "").strip()
 
+# ---- قائمة الشورت صفر الأسبوعية (كل يوم أحد) ----
+#   10 أسهم صار المتاح للشورت عندها صفر خلال آخر 7 أيام (الأحدث أول)
+BZ_WEEKLY_ZERO = True            # True = شغالة | False = مطفية
+BZ_WEEKLY_N = 10                 # كم سهم بالقائمة
+BZ_WEEKLY_DAYS = 7               # الفترة: آخر أسبوع
+BZ_WEEKLY_DAY = 6                # يوم الإرسال: 6 = الأحد (0 = الاثنين)
+BZ_WEEKLY_HOUR = 0               # يرسلها من هالساعة وطالع (توقيتك)
+BZ_WEEKLY_MAX_RISE = 30          # يستبعد السهم لو ارتفع أكثر من كذا % خلال الأسبوع (0 = بدون فلتر)
+
 # ---- (4د) سكنر الزخم: ارتفاع قوي + فوليوم نسبي + قريب من قمة اليوم (Alpaca، كل دقيقة) ----
 ENABLE_MOMENTUM = True  # True = شغال | False = مطفي
 MOM_MIN_PRICE = 1                # أقل سعر
@@ -2760,6 +2769,11 @@ def bz_check(state, first_run, universe):
 
     for k in [k for k, v in cool.items() if now - datetime.fromisoformat(v) >= timedelta(days=max(BZ_COOLDOWN_DAYS, 1))]:
         del cool[k]
+    zlog = state.get("_zero_log")
+    if not isinstance(zlog, dict):
+        zlog = state["_zero_log"] = {}
+    for k in [k for k, v in zlog.items() if now - datetime.fromisoformat(v) >= timedelta(days=30)]:
+        del zlog[k]
     for sym, u in universe.items():
         info = data.get(sym)
         prev = state.get(sym)
@@ -2770,6 +2784,10 @@ def bz_check(state, first_run, universe):
             info = {"available": 0, "fee": float("nan")}
         avail = info["available"]
         zero_now += avail == 0
+        if prev is not None and not first_run and prev > 0 and avail == 0:
+            zlog[sym] = now.isoformat()          # سجل الشورت صفر للقائمة الأسبوعية
+        elif avail > 0:
+            zlog.pop(sym, None)
         if prev is not None and not first_run:
             if BZ_ZERO_ALERTS and prev > 0 and avail == 0 and cooled("zero", sym):
                 _bz_out(state, "main",
@@ -2832,6 +2850,88 @@ def bz_check(state, first_run, universe):
     return True
 
 
+def bz_weekly_zero_list(state, universe, now=None):
+    """أسهم صار الشورت عندها صفر خلال آخر BZ_WEEKLY_DAYS يوم: [(الرمز، وقت الصفر)] — الأحدث أول."""
+    now = now or datetime.now(ZoneInfo(LOCAL_TZ))
+    since = now - timedelta(days=BZ_WEEKLY_DAYS)
+    found = {}
+    for sym, ts in (state.get("_zero_log") or {}).items():
+        t = datetime.fromisoformat(ts)
+        if t >= since and state.get(sym) == 0:
+            found[sym] = t
+    # تعويض للأيام اللي قبل هالتحديث: من سجل المتاح اليومي (آخر يوم انسجل فيه السهم = يوم صار صفر)
+    hist_all = (state.get("_drop") or {}).get("hist") or {}
+    for sym, hist in hist_all.items():
+        if sym in found or state.get(sym) != 0 or not hist or max(hist.values()) <= 0:
+            continue
+        t = datetime.strptime(max(hist), "%Y-%m-%d").replace(tzinfo=ZoneInfo(LOCAL_TZ))
+        if t.date() >= since.date():
+            found[sym] = t
+    items = [(s, t) for s, t in sorted(found.items(), key=lambda x: x[1], reverse=True) if s in universe]
+    if not BZ_WEEKLY_MAX_RISE or not items:
+        return [(s, t, None) for s, t in items][:BZ_WEEKLY_N]
+    rises = bz_week_rise([s for s, _ in items], since)
+    out = []
+    for s, t in items:
+        r = rises.get(s)
+        if r is not None and r > BZ_WEEKLY_MAX_RISE:
+            continue                      # عطى ارتفاع أكثر من 30% — يستبعد
+        out.append((s, t, r))
+        if len(out) >= BZ_WEEKLY_N:
+            break
+    return out
+
+
+def bz_week_rise(syms, since):
+    """{الرمز: أعلى ارتفاع % خلال الفترة} = (أعلى سعر من بداية الفترة ÷ إغلاق آخر يوم قبلها) - 1."""
+    out = {}
+    try:
+        for sym, df in download_batches(syms, 50, period="1mo", interval="1d"):
+            idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+            start = pd.Timestamp(since.date())
+            before, during = df[idx < start], df[idx >= start]
+            if before.empty or during.empty:
+                continue
+            base = float(before["Close"].iloc[-1])
+            if base > 0:
+                out[sym] = (float(during["High"].max()) / base - 1) * 100
+    except Exception as e:
+        log(f"الشورت صفر: ما قدرت أحسب الارتفاع الأسبوعي: {e}")
+    return out
+
+
+def bz_weekly_zero_text(state, universe, now=None):
+    now = now or datetime.now(ZoneInfo(LOCAL_TZ))
+    rows = bz_weekly_zero_list(state, universe, now)
+    head = (f"📋 قائمة الشورت صفر الأسبوعية - {now:%Y-%m-%d}\n"
+            f"أسهم صار الشورت عندها صفر خلال آخر {BZ_WEEKLY_DAYS} أيام"
+            + (f" وما ارتفعت أكثر من {BZ_WEEKLY_MAX_RISE}%" if BZ_WEEKLY_MAX_RISE else "") + "\n"
+            "الشورت صفر = ما فيه ولا سهم متاح للاستلاف عشان البيع على المكشوف (المصدر: Interactive Brokers)\n")
+    if not rows:
+        return head + "\nما فيه ولا سهم ينطبق عليه الشرط هالأسبوع."
+    lines = [f"{i}) ${s} - صفر من {t:%m-%d} | السعر {universe[s]['price']:.2f}$"
+             + (f" | أعلى ارتفاع {r:.0f}%" if r is not None else "")
+             + f" | القيمة {universe[s]['cap'] / 1e6:.1f} مليون$"
+             for i, (s, t, r) in enumerate(rows, 1)]
+    return head + f"\n({len(rows)} سهم)\n" + "\n".join(lines)
+
+
+def bz_weekly_zero(state, universe):
+    """كل أحد: يرسل القائمة مرة وحدة بالأسبوع."""
+    if not BZ_WEEKLY_ZERO or not universe:
+        return
+    now = datetime.now(ZoneInfo(LOCAL_TZ))
+    if now.weekday() != BZ_WEEKLY_DAY or now.hour < BZ_WEEKLY_HOUR:
+        return
+    wk = now.strftime("%G-W%V")
+    if state.get("_weekly_zero") == wk:
+        return
+    send_telegram(bz_weekly_zero_text(state, universe, now))
+    state["_weekly_zero"] = wk
+    _bz_save_state(state)
+    log("الشورت صفر: انرسلت القائمة الأسبوعية")
+
+
 BZ_TEST_ID = "1"   # غيّر الرقم لو تبي رسالة تجريبية ثانية بعد الرفع الجاي
 
 
@@ -2887,6 +2987,7 @@ def bz_run_forever():
                 bz_check(state, first_run, universe)
                 first_run = False
                 bz_dispatch(state)
+                bz_weekly_zero(state, universe)
                 if warned:
                     send_telegram("✅ تنبيه الشورت صفر رجع يشتغل (ملف IBKR يتحمل طبيعي)")
                 last_ok, warned = time.time(), False

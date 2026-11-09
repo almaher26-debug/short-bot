@@ -12,6 +12,11 @@
     - قائمة أسبوعية كل أحد: 10 أسهم صار الشورت عندها صفر خلال آخر 7 أيام
     - ENABLE_BORROW_ZERO = False يطفيه
 
+(4ج-2) نزول الشورت المتاح - نفس مصدر وأسهم (4ج)
+    - تنبيه "📉 نزول الشورت المتاح" لما المتاح ينزل 90% وأكثر عن أعلى رقم خلال آخر 30 يوم (وما وصل صفر)
+    - يشترك مع (4ج) بنفس الحد: 64 تنبيه باليوم للقسمين مع بعض، موزعة على 24 ساعة، وتنبيه واحد لكل سهم كل 7 أيام
+    - BZ_DROP_ALERTS = False يطفيه
+
 (4ب) التجزئة العكسية - أسهم ناسداك
     - كل يوم سوق (بعد 10 الصبح نيويورك): الأسهم اللي سوت تجزئة عكسية جديدة بس
     - كل جمعة: قائمة بتجزئات آخر 7 أيام
@@ -189,6 +194,11 @@ BZ_FTP_TIMEOUT = 10              # ثواني لكل محاولة (كانت 25 �
 BZ_EVERY_MIN = 2                 # كل كم دقيقة يفحص (كانت 15) — يمسك تحديث IBKR خلال دقيقتين
 BZ_WARN_AFTER_MIN = 60           # ينبهك لو ملف IBKR ما تحمّل من كذا دقيقة
 BZ_UNIVERSE_EVERY_MIN = 60       # كل كم دقيقة يحدث قائمة البني ستوك (السعر والقيمة السوقية)
+# ---- (4ج-2) نزول الشورت المتاح (نفس الطابور والحد اليومي 64 مع الشورت صفر) ----
+BZ_DROP_ALERTS = True            # True = شغال | False = مطفي
+BZ_DROP_PCT = 90                 # ينبه لما المتاح ينزل كذا % أو أكثر عن أعلى رقم بالفترة
+BZ_DROP_DAYS = 30                # الفترة: آخر شهر
+BZ_DROP_MIN_HIGH = 10_000        # أعلى رقم بالفترة لازم يكون كذا سهم وفوق (يشيل الأسهم اللي متاحها أصلاً قليل)
 BZ_SHORT_DAYS = 15               # كم يوم من حجم الشورت يكتب في التنبيه
 BZ_STATE_FILE = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "borrow_state.json")   # يُحفظ في /data عشان ما يضيع مع كل رفع
 
@@ -1148,6 +1158,16 @@ def bz_check(state, first_run, universe):
         zlog = state["_zero_log"] = {}
     for k in [k for k, v in zlog.items() if now - datetime.fromisoformat(v) >= timedelta(days=30)]:
         del zlog[k]
+    hist = state.get("_hist")              # {الرمز: {اليوم: أعلى متاح باليوم}} لآخر BZ_DROP_DAYS يوم
+    if not isinstance(hist, dict):
+        hist = state["_hist"] = {}
+    cutoff = (now - timedelta(days=BZ_DROP_DAYS)).strftime("%Y-%m-%d")
+    for s_ in list(hist):
+        h_ = {d: v for d, v in hist[s_].items() if d >= cutoff}
+        if h_:
+            hist[s_] = h_
+        else:
+            del hist[s_]
     for sym, u in universe.items():
         info = data.get(sym)
         prev = state.get(sym)
@@ -1176,6 +1196,29 @@ def bz_check(state, first_run, universe):
                     f"{bz_short_history_txt(sym)}", sym=sym)
                 alerts += 1
                 time.sleep(0.5)
+        # ---- (4ج-2) نزول الشورت المتاح عن أعلى رقم بالشهر ----
+        sh = hist.get(sym) or {}
+        if sh and not first_run and BZ_DROP_ALERTS and avail > 0:
+            top_day, top = max(sh.items(), key=lambda x: x[1])
+            drop = (1 - avail / top) * 100 if top else 0
+            was_above = prev is None or prev > top * (1 - BZ_DROP_PCT / 100)   # يعني توه نزل تحت الحد
+            if top >= BZ_DROP_MIN_HIGH and drop >= BZ_DROP_PCT and was_above and cooled("drop", sym):
+                _bz_out(state, "main",
+                    f"📉 نزول الشورت المتاح - ${sym}\n"
+                    f"نزل {drop:.0f}% من أعلى رقم خلال آخر شهر\n"
+                    f"الأسهم المتاحة للشورت: {avail:,}\n"
+                    f"أعلى رقم بالشهر: {top:,} (يوم {top_day})\n"
+                    f"السعر: {u['price']:.2f}$\n"
+                    f"القيمة السوقية: {u['cap'] / 1e6:.1f} مليون$\n"
+                    f"رسوم الاستلاف: {fee_txt(info['fee'])}\n"
+                    f"الوقت: {now:%Y-%m-%d %H:%M} (توقيتك)\n"
+                    f"المصدر: Interactive Brokers\n"
+                    f"{bz_cx_link(sym)}\n\n"
+                    f"{bz_short_history_txt(sym)}", sym=sym)
+                alerts += 1
+                time.sleep(0.5)
+        if avail > sh.get(today_s, -1):
+            hist.setdefault(sym, {})[today_s] = avail
         state[sym] = avail
     _bz_save_state(state)
     log(f"[{datetime.now():%H:%M}] الشورت صفر: {len(universe)} سهم بني ستوك — "

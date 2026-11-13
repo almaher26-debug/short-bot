@@ -20,7 +20,7 @@
     - ENABLE_BORROW_ZERO = False يطفيه
 
 (4ج-2) نزول الشورت المتاح - نفس مصدر وأسهم (4ج)
-    - تنبيه "📉 نزول الشورت المتاح" لما المتاح ينزل 90% وأكثر عن أعلى رقم خلال آخر 30 يوم (وما وصل صفر)
+    - تنبيه "📉 نزول الشورت المتاح" لما المتاح ينزل أكثر من 90% عن أعلى رقم خلال آخر 30 يوم (وما وصل صفر)
     - يشترك مع (4ج) بنفس الحد: 64 تنبيه باليوم للقسمين مع بعض، موزعة على 24 ساعة، وتنبيه واحد لكل سهم كل 7 أيام
     - BZ_DROP_ALERTS = False يطفيه
 
@@ -205,7 +205,7 @@ FLOW_SENT_FILE = "flow_sent.txt" # عشان ما يعيد نفس السهم بن
 
 # ---- (4ج) الشورت صفر اللحظي: الأسهم المتاحة للشورت وصلت صفر (Interactive Brokers كل 15 دقيقة) ----
 ENABLE_BORROW_ZERO = True  # True = شغال | False = مطفي
-BZ_ZERO_ALERTS = True            # تنبيه "🚫 الشورت صفر" اللحظي: False = مطفي | True = يرجع
+BZ_ZERO_ALERTS = False           # تنبيه "🚫 الشورت صفر" اللحظي: False = مطفي | True = يرجع
 BZ_SPREAD_24H = True             # True = التنبيهات تنقسم على 24 ساعة (وحدة كل 24÷BZ_MAX_PER_DAY = 22.5 دقيقة) | False = ترسل فوراً
 BZ_MAX_PER_DAY = 64              # أقصى عدد تنبيهات الشورت صفر باليوم | 0 = بدون حد
 BZ_COOLDOWN_DAYS = 7             # تنبيه واحد لكل سهم كل كذا يوم | 0 = بدون حد
@@ -220,7 +220,7 @@ BZ_WARN_AFTER_MIN = 60           # ينبهك لو ملف IBKR ما تحمّل �
 BZ_UNIVERSE_EVERY_MIN = 60       # كل كم دقيقة يحدث قائمة البني ستوك (السعر والقيمة السوقية)
 # ---- (4ج-2) نزول الشورت المتاح (نفس الطابور والحد اليومي 64 مع الشورت صفر) ----
 BZ_DROP_ALERTS = True            # True = شغال | False = مطفي
-BZ_DROP_PCT = 90                 # ينبه لما المتاح ينزل كذا % أو أكثر عن أعلى رقم بالفترة
+BZ_DROP_PCT = 90                 # ينبه لما المتاح ينزل أكثر من كذا % عن أعلى رقم بالفترة
 BZ_DROP_DAYS = 30                # الفترة: آخر شهر
 BZ_DROP_MIN_HIGH = 10_000        # أعلى رقم بالفترة لازم يكون كذا سهم وفوق (يشيل الأسهم اللي متاحها أصلاً قليل)
 BZ_SHORT_DAYS = 15               # كم يوم من حجم الشورت يكتب في التنبيه
@@ -1316,8 +1316,8 @@ def bz_check(state, first_run, universe):
         if sh and not first_run and BZ_DROP_ALERTS and avail > 0:
             top_day, top = max(sh.items(), key=lambda x: x[1])
             drop = (1 - avail / top) * 100 if top else 0
-            was_above = prev is None or prev > top * (1 - BZ_DROP_PCT / 100)   # يعني توه نزل تحت الحد
-            if top >= BZ_DROP_MIN_HIGH and drop >= BZ_DROP_PCT and was_above and cooled("drop", sym):
+            was_above = prev is None or prev >= top * (1 - BZ_DROP_PCT / 100)   # يعني توه نزل تحت الحد
+            if top >= BZ_DROP_MIN_HIGH and drop > BZ_DROP_PCT and was_above and cooled("drop", sym):
                 _bz_out(state, "main",
                     f"📉 نزول الشورت المتاح - ${sym}\n"
                     f"نزل {drop:.0f}% من أعلى رقم خلال آخر شهر\n"

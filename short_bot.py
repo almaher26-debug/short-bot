@@ -57,6 +57,15 @@
     - تنبيه واحد بس لكل سهم كل 24 ساعة (ALGO_PENNY_ONCE_HOURS، ونفسه للقسم (6) ALGO_SMALL_ONCE_HOURS)
     - ALGO_PENNY=0 في Railway يطفيه
 
+(6ب) خوارزميات الأسهم الكبيرة - قائمة المراقبة (WATCH_SYMBOLS) - من ألباكا
+    - 300 صفقة أو أكثر ورا بعض بحجم سهم واحد بالضبط، وما بينها ولا صفقة بحجم ثاني، والفاصل 5 ثواني أو أقل
+    - ينبه بس لو "شراء كامل" أو "بيع كامل" (الجهة وحدة 90% وفوق) - وقت السوق الرسمي بس
+    - ALGO_BIG=0 في Railway يطفيه (أو ALGO_BIG_SYMBOLS لقائمة ثانية)
+
+(6د) الآيس بيرغ - نفس أسهم (6ب) ونفس الصفقات (ما يزيد طلبات على ألباكا)
+    - 500 صفقة أو أكثر ورا بعض بنفس الحجم ونفس السعر بالضبط (من سهم إلى 10 أسهم)، والفاصل ثانيتين أو أقل
+    - تحديث عند 1000 ثم 2000 ... | ALGO_ICE=0 في Railway يطفيه
+
 (7) الأخبار الإيجابية - من ألباكا (نفس المفاتيح) - 24 ساعة، كل دقيقة
     - اندماج/استحواذ، موافقة FDA، نتائج دراسة إيجابية، عقود وشراكات، نتائج قوية ورفع توقعات،
       ترقية محلل، إعادة شراء وتوزيعات
@@ -247,8 +256,8 @@ PWL_MAX_ALERT_DELAY_MIN = 30     # ما ينبه على شمعة قفلت من �
 #   الشموع بدون الجلسة الليلية: 4-8 بري، 8-12، 12-4 ماركت، 4-8 أفتر (نيويورك)
 #   قمة وقاع الأسبوع السابق محسوبة من بري + ماركت + أفتر (4 الفجر - 8 بالليل) بدون الليلي
 #   تنبيه واحد لكل سهم بالأسبوع لكل جهة (دعم / مقاومة)
-ENABLE_PWL_4H = False  # الدعم: True = شغال | False = مطفي
-ENABLE_PWH_4H = False  # المقاومة: True = شغال | False = مطفي
+ENABLE_PWL_4H = True  # الدعم: True = شغال | False = مطفي
+ENABLE_PWH_4H = True  # المقاومة: True = شغال | False = مطفي
 PW4H_WICK_ONLY = True  # True = الذيل بس يكسر المستوى، الافتتاح والإغلاق كلهم بجهته | False = الإغلاق بس
 
 # ---- (1) الإنفيرجن IFVG - فريم ساعة و4 ساعات - قائمة المراقبة (WATCH_SYMBOLS) ----
@@ -280,6 +289,14 @@ WKOPT_OPT_MIN_VOLUME = 500       # حجم التداول في العقد فوق 
 WKOPT_OPT_MIN_OI = 1000          # العقود المفتوحة (الكمية غير إغلاق المركز) فوق 1000
 WKOPT_OPT_MIN_DELTA = 0.12       # الدلتا فوق 0.1200 (للبوت: القيمة المطلقة)
 WKOPT_REQUIRE_CONTRACT = True    # True = ما ينبه إلا لو لقى عقد بالشروط | False = ينبه حتى بدون عقد
+# ---- تمركز القاما للعقود مع تنبيه سحب السيولة (1ك-2) و (12) ----
+#   من سلسلة عقود ياهو (العقود المفتوحة + IV): قاما كل سترايك × العقود المفتوحة × 100 × السعر² × 1%
+#   الكول موجب والبوت سالب. يطلع: جدار الكول، جدار البوت، أعلى السترايكات، صافي القاما، ونقطة الانقلاب
+SWEEP_GAMMA = True               # True = يضيف تمركز القاما للتنبيه | False = بدون
+GAMMA_MAX_DTE = 30               # الانتهاءات اللي تدخل بالحساب: من اليوم إلى كذا يوم
+GAMMA_MAX_EXPS = 4               # أقصى عدد انتهاءات (أقربها)
+GAMMA_RANGE_PCT = 20             # السترايكات بس اللي داخل ±كذا % من السعر
+GAMMA_TOP_N = 3                  # كم سترايك يكتب في "أعلى تمركز"
 SWEEP_CHART = True               # صورة شارت 4 ساعات مع تنبيه السحب (يحتاج matplotlib) | False = نص بس
 SWEEP_CHART_BARS = 30            # كم شمعة 4 ساعات تطلع بالصورة
 
@@ -337,6 +354,35 @@ ALGO_PENNY_MIN_PRICE = 1
 ALGO_PENNY_MAX_PRICE = 5
 ALGO_PENNY_MAX_MARKET_CAP = 40_000_000
 ALGO_PENNY_MAX_SYMBOLS = 300          # الأنشط أول
+
+
+# ---- (6ب) خوارزميات الأسهم الكبيرة: صفقات متتالية بنفس الحجم ----
+# أسهم ناسداك اللي قيمتها السوقية مليار دولار وفوق
+# ينبه لما تجي 600 صفقة أو أكثر ورا بعض بنفس الحجم بالضبط، وما بينها ولا صفقة بحجم ثاني
+# الأحجام الصغيرة بس: 10 أسهم وأقل (1، 1، 1 ... أو 5، 5، 5 ...)
+ALGO_BIG = os.environ.get("ALGO_BIG", "1") != "0"      # 0 = يطفي هالقسم
+ALGO_BIG_MIN_MARKET_CAP = 1_000_000_000   # مليار دولار وفوق
+ALGO_BIG_MIN_STREAK = 300                 # أقل عدد صفقات متتالية بنفس الحجم
+ALGO_BIG_MAX_SIZE = 1                     # حجم الصفقة: سهم واحد بس (1، 1، 1...)
+ALGO_BIG_MAX_GAP_SEC = 5                  # لو مر أكثر من كذا ثانية بين صفقتين، تنقطع السلسلة
+ALGO_BIG_MAX_SYMBOLS = int(os.environ.get("ALGO_BIG_MAX_SYMBOLS", "250"))   # الأنشط أول
+ALGO_BIG_SYMBOLS = ([s.strip().upper() for s in os.environ.get("ALGO_BIG_SYMBOLS", "").split(",")
+                     if s.strip()] or stocks_only(WATCH_SYMBOLS))   # الافتراضي: قائمة المراقبة (بدون المؤشرات)
+ALGO_BIG_REGULAR_ONLY = True              # وقت السوق الرسمي بس (9:30 - 4 نيويورك)
+ALGO_BIG_ONE_SIDE_PCT = 90                # "شراء كامل" أو "بيع كامل": الجهة وحدة 90% وفوق، وإلا ما ينبه
+ALGO_BIG_POLL_SEC = 20                    # كل كم ثانية يسحب الصفقات الجديدة
+ALGO_BIG_CHUNK = 20                       # كم سهم بكل طلب لألباكا (الكبيرة صفقاتها كثيرة)
+ALGO_BIG_REALERT_MIN = 15                 # ما يعيد التنبيه لنفس السهم والحجم قبل كذا دقيقة
+
+# ---- (6د) الآيس بيرغ: صفقات متتالية بنفس الحجم ونفس السعر بالضبط ----
+# نفس أسهم (6ب) (ناسداك مليار وفوق) ونفس الصفقات اللي تنسحب لها، فما يزيد طلبات على ألباكا
+# مثال: 1، 1، 1 ... (من سهم إلى 10 أسهم) كلها على نفس السعر ورا بعض، وما بينها ولا صفقة ثانية
+ALGO_ICE = os.environ.get("ALGO_ICE", "1") != "0"      # 0 = يطفي هالقسم (يشتغل لو (6ب) شغال)
+ALGO_ICE_MIN_STREAK = 500                 # أقل عدد صفقات متتالية
+ALGO_ICE_MIN_SIZE = 1                     # أقل حجم للصفقة: سهم واحد
+ALGO_ICE_MAX_SIZE = 10                    # أعلى حجم للصفقة: 10 أسهم
+ALGO_ICE_MAX_GAP_SEC = 2                  # "وقت قصير": أكثر من كذا ثانية بين صفقتين = تنقطع السلسلة
+ALGO_ICE_REALERT_MIN = 5                  # ما يعيد التنبيه لنفس السهم ونفس الحجم والسعر قبل كذا دقيقة
 
 # ---- (7) الأخبار الإيجابية - من ألباكا (نفس المفاتيح) ----
 # اندماج، استحواذ، موافقة FDA، عقود وشراكات، نتائج قوية، رفع توقعات، ترقية، إعادة شراء ...
@@ -1751,14 +1797,16 @@ def scan_pwl_4h(symbols, sent):
                     sent.add(wk_key)
                     _append_line(GAP_SENT_FILE, wk_key)
                     hits += 1
-                    send_telegram(wkopt_message(t, side, lvl, lvl_day, r, opt), kind="sweep", sym=t)
+                    send_telegram(with_gamma(wkopt_message(t, side, lvl, lvl_day, r, opt), t, r["close"]),
+                                  kind="sweep", sym=t)
                     break
                 key = f"{t}-{tag}-{wk0:%Y%m%d}"
                 if old_on and key not in sent:
                     sent.add(key)
                     _append_line(GAP_SENT_FILE, key)
                     hits += 1
-                    send_telegram(_pwl_message(t, side, lvl, lvl_day, r, frame="فريم 4 ساعات", trade=True),
+                    send_telegram(with_gamma(_pwl_message(t, side, lvl, lvl_day, r, frame="فريم 4 ساعات",
+                                                          trade=True), t, r["close"]),
                                   kind="sweep", sym=t)
         except Exception as e:
             log(f"سحب دعم/مقاومة الأسبوع السابق: {t}: خطأ - {e}")
@@ -2057,7 +2105,8 @@ def pw4h_now(symbols, send=False):
                     r = fn(part, lvl, wk0, wick_only=PW4H_WICK_ONLY)
                     if r:
                         found += 1
-                        msg = _pwl_message(t, side, lvl, lvl_day, r, frame="فريم 4 ساعات", trade=True)
+                        msg = with_gamma(_pwl_message(t, side, lvl, lvl_day, r, frame="فريم 4 ساعات",
+                                                      trade=True), t, r["close"])
                         print(msg + "\n")
                         if send:
                             send_telegram("🧪 تجربة\n" + msg, kind="sweep", sym=t)
@@ -2252,6 +2301,117 @@ def _opt_open_interest(t, x):
     if len(_OI_CACHE) > 50000:
         _OI_CACHE.clear()
     return _OI_CACHE.setdefault(sym, None)
+
+
+# ================== تمركز القاما (يستخدمه سحب السيولة) ==================
+def _bs_gamma(spot, strike, years, iv):
+    """قاما بلاك شولز (نفسها للكول والبوت)."""
+    if not (spot and strike and years > 0 and iv and iv > 0.01):
+        return 0.0
+    sq = iv * math.sqrt(years)
+    d1 = (math.log(spot / strike) + (PDR_OPT_RATE + iv * iv / 2) * years) / sq
+    return math.exp(-d1 * d1 / 2) / math.sqrt(2 * math.pi) / (spot * sq)
+
+
+def _gamma_rows(t, spot):
+    """[(سترايك، سنوات، IV، العقود المفتوحة، كول؟)] من ياهو لأقرب الانتهاءات، والانتهاءات المستخدمة."""
+    import yfinance as yf
+    today = pd.Timestamp.now(tz=NY).date()
+    last = today + timedelta(days=GAMMA_MAX_DTE)
+    with _YF_LOCK:
+        tk = yf.Ticker(t)
+        exps = [e for e in (tk.options or []) if today <= pd.Timestamp(e).date() <= last]
+    exps = sorted(exps)[:GAMMA_MAX_EXPS]
+    lo, hi = spot * (1 - GAMMA_RANGE_PCT / 100), spot * (1 + GAMMA_RANGE_PCT / 100)
+    rows = []
+    for e in exps:
+        with _YF_LOCK:
+            ch = tk.option_chain(e)
+        yrs = _opt_years(pd.Timestamp(e).date())
+        for df, is_call in ((ch.calls, True), (ch.puts, False)):
+            for x in df.itertuples():
+                k = float(x.strike)
+                oi = 0 if pd.isna(x.openInterest) else int(x.openInterest)
+                iv = 0 if pd.isna(x.impliedVolatility) else float(x.impliedVolatility)
+                if lo <= k <= hi and oi > 0 and iv > 0.01:
+                    rows.append((k, yrs, iv, oi, is_call))
+    return rows, exps
+
+
+def _gex_at(rows, s):
+    """صافي القاما بالدولار لكل 1% حركة لو السعر = s."""
+    tot = 0.0
+    for k, yrs, iv, oi, is_call in rows:
+        g = _bs_gamma(s, k, yrs, iv) * oi * 100 * s * s * 0.01
+        tot += g if is_call else -g
+    return tot
+
+
+def _fmt_usd(v):
+    a = abs(v)
+    sgn = "-" if v < 0 else ""
+    if a >= 1e9:
+        return f"{sgn}{a / 1e9:.2f}B$"
+    if a >= 1e6:
+        return f"{sgn}{a / 1e6:.1f}M$"
+    if a >= 1e3:
+        return f"{sgn}{a / 1e3:.0f}K$"
+    return f"{sgn}{a:.0f}$"
+
+
+def gamma_block(t, spot):
+    """نص تمركز القاما للتنبيه، أو "" لو ما فيه بيانات."""
+    if not SWEEP_GAMMA or not spot:
+        return ""
+    rows, exps = _gamma_rows(t, float(spot))
+    if not rows:
+        return ""
+    spot = float(spot)
+    calls, puts = {}, {}
+    for k, yrs, iv, oi, is_call in rows:
+        g = _bs_gamma(spot, k, yrs, iv) * oi * 100 * spot * spot * 0.01
+        d = calls if is_call else puts
+        d[k] = d.get(k, 0.0) + g
+    pct = lambda k: f"{(k / spot - 1) * 100:+.1f}%"
+    lines = [f"🧲 تمركز القاما (أقرب {len(exps)} انتهاء، لين {pd.Timestamp(exps[-1]):%m-%d}):"]
+    if calls:
+        kc = max(calls, key=calls.get)
+        lines.append(f"جدار الكول: {kc:g} ({pct(kc)}) — {_fmt_usd(calls[kc])}")
+    if puts:
+        kp = max(puts, key=puts.get)
+        lines.append(f"جدار البوت: {kp:g} ({pct(kp)}) — {_fmt_usd(-puts[kp])}")
+    total = {k: calls.get(k, 0.0) + puts.get(k, 0.0) for k in set(calls) | set(puts)}
+    top = sorted(total, key=total.get, reverse=True)[:GAMMA_TOP_N]
+    if top:
+        lines.append("أعلى تمركز: " + " | ".join(f"{k:g} ({pct(k)})" for k in top))
+    net = _gex_at(rows, spot)
+    lines.append(f"صافي القاما: {_fmt_usd(net)} لكل 1% — "
+                 + ("موجب ← حركة أهدى والسعر ينشد للسترايكات الكبيرة" if net >= 0
+                    else "سالب ← الحركة أقوى وأسرع"))
+    # نقطة الانقلاب: أقرب سعر للسعر الحالي يتغير عنده صافي القاما من سالب لموجب
+    grid = [spot * (1 + i / 200) for i in range(-30, 31)]       # ±15% بخطوة 0.5%
+    vals = [_gex_at(rows, s) for s in grid]
+    flips = [(grid[i] + grid[i + 1]) / 2 for i in range(len(grid) - 1) if (vals[i] < 0) != (vals[i + 1] < 0)]
+    if flips:
+        f = min(flips, key=lambda x: abs(x - spot))
+        lines.append(f"نقطة الانقلاب: {f:.2f} ({pct(f)}) — "
+                     + ("السعر فوقها" if spot > f else "السعر تحتها"))
+    return "\n".join(lines)
+
+
+def with_gamma(msg, t, spot):
+    """يضيف تمركز القاما للتنبيه (قبل سطر التنبيه ⚠️ لو موجود)."""
+    try:
+        g = gamma_block(t, spot)
+    except Exception as e:
+        log(f"تمركز القاما: {t}: {e}")
+        return msg
+    if not g:
+        return msg
+    if "\n⚠️" in msg:
+        a, b = msg.rsplit("\n⚠️", 1)
+        return a.rstrip() + "\n\n" + g + "\n\n⚠️" + b
+    return msg + "\n\n" + g
 
 
 # ================== (4ب) التجزئة العكسية ==================
@@ -2899,6 +3059,219 @@ def get_pennies():
         return {}
 
 
+# ================== (6ب) خوارزميات الأسهم الكبيرة + (6د) الآيس بيرغ ==================
+def get_bigcaps():
+    """أسهم ناسداك اللي قيمتها السوقية مليار وفوق، الأنشط تداولاً أول. يرجع {الرمز: القيمة السوقية}."""
+    if ONE_LIST:
+        return {sym: None for sym in stocks_only(WATCH_SYMBOLS)}
+    try:
+        picks = [(vol, sym, cap) for sym, cap, vol, px in _nasdaq_rows()
+                 if cap >= ALGO_BIG_MIN_MARKET_CAP and vol > 0]
+        picks.sort(reverse=True)
+        return {sym: cap for _, sym, cap in picks[:ALGO_BIG_MAX_SYMBOLS]}
+    except Exception as e:
+        log("خوارزميات الكبيرة: ما قدرت أجيب القيم السوقية من ناسداك -", e)
+        return {}
+
+
+def _ts_sec(t):
+    """وقت الصفقة بالثواني (سريع، لأن الأسهم الكبيرة فيها آلاف الصفقات بكل سحبة)."""
+    if isinstance(t, str) and len(t) >= 19:
+        base = datetime.fromisoformat(t[:19]).replace(tzinfo=timezone.utc).timestamp()
+        frac = t[19:].split("+")[0].rstrip("Z")
+        if frac.startswith(".") and len(frac) > 1:
+            base += float("0" + frac[:10])
+        return base
+    return pd.Timestamp(t).timestamp()
+
+
+class StreakDetector:
+    """يعد الصفقات المتتالية بنفس الحجم لكل سهم: أي صفقة بحجم مختلف (أو فاصل أكثر من
+    ALGO_BIG_MAX_GAP_SEC ثانية) تقطع السلسلة وتبدأ وحدة جديدة.
+    ينبه عند ALGO_BIG_MIN_STREAK، ثم كل ما تتضاعف (600، 1200، 2400 ...).
+    same_price=True = لازم نفس السعر بعد (الآيس بيرغ)."""
+    def __init__(self, min_streak=None, min_size=0, max_size=None, max_gap=None,
+                 realert_min=None, same_price=False):
+        self.min_streak = min_streak or ALGO_BIG_MIN_STREAK
+        self.min_size = min_size
+        self.max_size = ALGO_BIG_MAX_SIZE if max_size is None else max_size   # 0 = بدون حد
+        self.max_gap = ALGO_BIG_MAX_GAP_SEC if max_gap is None else max_gap
+        self.realert = (ALGO_BIG_REALERT_MIN if realert_min is None else realert_min) * 60
+        self.same_price = same_price
+        self.st = {}          # الرمز -> السلسلة الحالية
+        self.recent = {}      # الرمز -> (deque[(الوقت، رقم الصفقة)], set) لآخر 60 ثانية - لمنع التكرار
+        self.alerted = {}     # (الرمز، الحجم) -> وقت آخر تنبيه
+
+    def _dup(self, sym, tid, ts):
+        if tid is None:
+            return False
+        q, ids = self.recent.setdefault(sym, (deque(), set()))
+        while q and q[0][0] < ts - 60:
+            ids.discard(q.popleft()[1])
+        if tid in ids:
+            return True
+        q.append((ts, tid))
+        ids.add(tid)
+        return False
+
+    def add(self, sym, trade):
+        ts = _ts_sec(trade["t"])
+        if self._dup(sym, trade.get("i"), ts):
+            return None
+        size = float(trade.get("s") or 0)
+        price = float(trade.get("p") or 0)
+        if size <= 0 or price <= 0:
+            return None
+        s = self.st.get(sym)
+        side = s["side"] if s else 0
+        if s and price != s["px"]:
+            side = 1 if price > s["px"] else -1       # نفس السعر = نفس جهة اللي قبلها
+        moment = round(ts, 3)                         # "نفس اللحظة" = نفس الملي ثانية
+        prev_px = s["px"] if s else None
+        if s and s["size"] == size and ts - s["last"] <= self.max_gap \
+                and (not self.same_price or price == prev_px):
+            s["n"] += 1
+            s["same"] = s["same"] + 1 if moment == s["moment"] else 1
+            s["max_same"] = max(s["max_same"], s["same"])
+            s["low"], s["high"] = min(s["low"], price), max(s["high"], price)
+            s["value"] += size * price
+        else:
+            s = {"size": size, "n": 1, "first": ts, "low": price, "high": price,
+                 "value": size * price, "buys": 0, "sells": 0, "same": 1, "max_same": 1,
+                 "next_alert": self.min_streak}
+            self.st[sym] = s
+        s["buys"] += side > 0
+        s["sells"] += side < 0
+        s["last"], s["px"], s["side"], s["moment"] = ts, price, side, moment
+        if s["n"] < s["next_alert"] or size < self.min_size \
+                or (self.max_size and size > self.max_size):
+            return None
+        s["next_alert"] *= 2
+        k = (sym, size, price if self.same_price else None)
+        first_alert = s["n"] == self.min_streak
+        last = self.alerted.get(k)
+        if first_alert and last is not None and ts - last < self.realert:
+            return None
+        self.alerted[k] = ts
+        return {"size": size, "count": s["n"], "first_t": s["first"], "last_t": ts,
+                "low": s["low"], "high": s["high"], "last": price, "value": s["value"],
+                "buys": s["buys"], "sells": s["sells"], "max_same": s["max_same"],
+                "update": not first_alert}
+
+
+def _ice_message(sym, a, cap=None):
+    secs = a["last_t"] - a["first_t"]
+    b, s_, total = a["buys"], a["sells"], a["count"]
+    t1 = pd.Timestamp(a["first_t"], unit="s", tz="UTC").tz_convert(LOCAL_TZ)
+    t2 = pd.Timestamp(a["last_t"], unit="s", tz="UTC").tz_convert(LOCAL_TZ)
+    head = ("🔁 تحديث: الآيس بيرغ مستمر" if a["update"] else
+            "🧊 آيس بيرغ — صفقات متتالية بنفس الحجم ونفس السعر")
+    return (f"{head}\n"
+            f"السهم: ${sym}\n"
+            + (f"القيمة السوقية: {_cap_txt(cap)}\n" if cap else "")
+            + f"الحجم: {a['size']:g} سهم × {total:,} صفقة ورا بعض\n"
+            f"السعر: {a['last']:.2f} (نفس السعر كلها)\n"
+            f"المبلغ: ≈ {a['value']:,.0f}$ ({a['size'] * total:,.0f} سهم)\n"
+            f"خلال: {secs:.1f} ثانية | أكثر عدد صفقات بنفس اللحظة: {a['max_same']}\n"
+            + _side_lines(b, s_, total, a["size"])
+            + f"المصدر: {ALGO_FEED.upper()} عبر Alpaca (كل البورصات)"
+            + (f" - متأخر {ALGO_DELAY_MIN - 1} دقيقة" if ALGO_DELAY_MIN else "") + "\n"
+            f"من {t1:%H:%M:%S} إلى {t2:%H:%M:%S} (توقيتك)")
+
+
+def _big_message(sym, a, cap=None):
+    secs = max(a["last_t"] - a["first_t"], 0.001)
+    b, s_, total = a["buys"], a["sells"], a["count"]
+    t1 = pd.Timestamp(a["first_t"], unit="s", tz="UTC").tz_convert(LOCAL_TZ)
+    t2 = pd.Timestamp(a["last_t"], unit="s", tz="UTC").tz_convert(LOCAL_TZ)
+    if a.get("one_side") == "buy":
+        head = "🟢🤖 خوارزمية شراء كامل — صفقات سهم واحد متتالية"
+    elif a.get("one_side") == "sell":
+        head = "🔴🤖 خوارزمية بيع كامل — صفقات سهم واحد متتالية"
+    else:
+        head = ("🔁 تحديث: السلسلة مستمرة" if a["update"] else
+                "🏦🤖 خوارزمية على سهم كبير — صفقات متتالية بنفس الحجم")
+    return (f"{head}\n"
+            f"السهم: ${sym}\n"
+            + (f"القيمة السوقية: {_cap_txt(cap)}\n" if cap else "")
+            + f"الحجم المتكرر: {a['size']:g} سهم\n"
+            f"عدد الصفقات المتتالية: {total:,} (ولا صفقة بحجم ثاني بينها)\n"
+            f"المدة: {secs:.1f} ثانية (≈ {total / secs:.0f} صفقة/ثانية)\n"
+            f"أكثر عدد صفقات بنفس اللحظة: {a['max_same']}\n"
+            f"قيمتها: ≈ {a['value']:,.0f}$\n"
+            f"السعر: ${a['last']:.2f} (من {a['low']:.2f} إلى {a['high']:.2f})\n"
+            + _side_lines(b, s_, total, a["size"])
+            + f"المصدر: {ALGO_FEED.upper()} عبر Alpaca"
+            + (f" (متأخر {ALGO_DELAY_MIN - 1} دقيقة)" if ALGO_DELAY_MIN else "") + "\n"
+            f"من {t1:%H:%M:%S} إلى {t2:%H:%M:%S} (توقيتك)")
+
+
+def algo_big_loop():
+    det = StreakDetector()
+    ice = (StreakDetector(ALGO_ICE_MIN_STREAK, ALGO_ICE_MIN_SIZE, ALGO_ICE_MAX_SIZE,
+                          ALGO_ICE_MAX_GAP_SEC, ALGO_ICE_REALERT_MIN, same_price=True)
+           if ALGO_ICE else None)
+    last_end, was_on = None, None
+    caps, caps_day = {}, None
+    while True:
+        try:
+            now = pd.Timestamp.now(tz="UTC")
+            end = now - pd.Timedelta(minutes=ALGO_DELAY_MIN)
+            end_ny = end.tz_convert(NY)
+            on = (end_ny.weekday() < 5 and (9, 30) <= (end_ny.hour, end_ny.minute) < (16, 0)
+                  if ALGO_BIG_REGULAR_ONLY else trading_hours(end_ny))
+            if on != was_on:
+                log("خوارزميات الكبيرة: " + ("بدأ المراقبة" if on else "السوق مسكر، أنتظر"))
+                was_on = on
+            if not on:
+                last_end = None
+                time.sleep(60)
+                continue
+            today = pd.Timestamp.now(tz=NY).date()
+            if caps_day != today or not caps:
+                caps = (get_bigcaps() if ONE_LIST or not ALGO_BIG_SYMBOLS
+                        else {s_: None for s_ in ALGO_BIG_SYMBOLS})
+                caps_day = today
+                log(f"خوارزميات الكبيرة: يراقب {len(caps)} سهم (قائمة المراقبة) - شراء كامل/بيع كامل - تنبيه عند "
+                    f"{ALGO_BIG_MIN_STREAK} صفقة متتالية بنفس الحجم ({ALGO_BIG_MAX_SIZE:g} أسهم وأقل)"
+                    + (f" | الآيس بيرغ: {ALGO_ICE_MIN_STREAK} صفقة متتالية بنفس الحجم والسعر" if ALGO_ICE else ""))
+            syms = list(caps)
+            if not syms:
+                time.sleep(300)
+                continue
+            start = last_end or end - pd.Timedelta(seconds=60)
+            got = None
+            for i in range(0, len(syms), ALGO_BIG_CHUNK):
+                part = fetch_alpaca_trades(syms[i:i + ALGO_BIG_CHUNK], start, end)
+                if part is not None:
+                    got = got or {}
+                    got.update(part)
+            if got is not None:
+                last_end = end
+                for sym, trades in got.items():
+                    for tr in sorted(trades, key=lambda x: x.get("t", "")):
+                        res = det.add(sym, tr)
+                        if res and not res["update"]:      # تنبيه واحد لكل سلسلة
+                            directional = res["buys"] + res["sells"]
+                            need = ALGO_BIG_ONE_SIDE_PCT / 100
+                            if directional and res["buys"] / directional >= need:
+                                res["one_side"] = "buy"
+                            elif directional and res["sells"] / directional >= need:
+                                res["one_side"] = "sell"
+                            else:
+                                res = None                 # مخلوطة بيع وشراء: ما ينبه
+                            if res:
+                                send_telegram(_big_message(sym, res, caps.get(sym)), kind="algo_big", sym=sym)
+                        if ice is not None:
+                            res = ice.add(sym, tr)
+                            if res:
+                                send_telegram(_ice_message(sym, res, caps.get(sym)), kind="ice", sym=sym)
+                del got
+        except Exception as e:
+            log("خوارزميات الكبيرة: خطأ -", e)
+        time.sleep(ALGO_BIG_POLL_SEC)
+
+
 def _once_load(tag):
     """آخر تنبيه لكل سهم في هالقسم: {الرمز: الوقت}."""
     out = {}
@@ -2999,6 +3372,8 @@ def start_algo_thread():
         threading.Thread(target=algo_loop, daemon=True, name="algo_penny",
                          args=("خوارزميات البني ستوك", sec, get_pennies, None,
                                lambda: RSPLIT_ALGO_SYMS, ALGO_PENNY_ONCE_HOURS)).start()
+    if ALGO_BIG:
+        threading.Thread(target=algo_big_loop, daemon=True, name="algo_big").start()
 
 
 def algo_self_test():
@@ -3024,6 +3399,49 @@ def algo_self_test():
     ALGO_MIN_VALUE = saved
     print("ALGO TEST OK: 300 / 600 same-size trades")
     print(_algo_message("TEST", alerts[-1], 12_300_000))
+
+    # (6ب) الكبيرة: 1100 صفقة متتالية بحجم سهم واحد (كل 3 ورا بعض بنفس اللحظة)، ثم صفقة بحجم ثاني تقطعها
+    det = StreakDetector(); big = []
+    for k in range(1100):
+        tr = {"i": k + 1, "s": 1, "p": 180.00 - (k // 50) * 0.01,
+              "t": (t0 + pd.Timedelta(milliseconds=(k // 3) * 40)).strftime("%Y-%m-%dT%H:%M:%S.%f000Z")}
+        a = det.add("BIGCAP", tr)
+        if a: big.append(a)
+    assert det.add("BIGCAP", {"i": 1101, "s": 1, "p": 180, "t": "2026-01-02T15:00:00.000000000Z"}) is None  # مكرر
+    det.add("BIGCAP", {"i": 9999, "s": 37, "p": 179.9, "t": "2026-01-02T15:00:10Z"})   # حجم ثاني = تنقطع
+    for k in range(ALGO_BIG_MIN_STREAK - 1):   # أقل من الحد بوحدة = ما ينبه
+        a = det.add("BIGCAP", {"i": 10000 + k, "s": 1, "p": 179.9, "t": t0 + pd.Timedelta(seconds=11 + k * 0.01)})
+        assert a is None
+    # تنبيه عند الحد (300)، وعند الضعف (600) تحديث - والتشغيل يرسل الأول بس (تنبيه واحد لكل سلسلة)
+    assert [a["count"] for a in big] == [ALGO_BIG_MIN_STREAK, ALGO_BIG_MIN_STREAK * 2], [a["count"] for a in big]
+    assert not big[0]["update"] and big[1]["update"]
+    for k in range(1300):         # حجم 100 (أكبر من 10) = يتجاهل
+        assert det.add("BIG100", {"i": k + 1, "s": 100, "p": 50, "t": t0 + pd.Timedelta(milliseconds=k * 10)}) is None
+    assert big[0]["max_same"] == 3
+    print(f"ALGO BIG TEST OK: {ALGO_BIG_MIN_STREAK} consecutive same-size trades")
+
+    # (6د) آيس بيرغ: 600 صفقة × سهم واحد على 228.15 ورا بعض (بعد صفقة أقل سعر = شراء)
+    ice = StreakDetector(ALGO_ICE_MIN_STREAK, ALGO_ICE_MIN_SIZE, ALGO_ICE_MAX_SIZE,
+                         ALGO_ICE_MAX_GAP_SEC, ALGO_ICE_REALERT_MIN, same_price=True)
+    ice.add("NVDA", {"i": 1, "s": 13, "p": 228.10, "t": t0})
+    got = [a for k in range(600) if (a := ice.add("NVDA", {"i": k + 2, "s": 1, "p": 228.15,
+                                                         "t": t0 + pd.Timedelta(milliseconds=50 * k)}))]
+    assert [a["count"] for a in got] == [500] and got[0]["buys"] == 500, got
+    # حجم 70 (أكبر من 10) = يتجاهل
+    for k in range(300):
+        assert ice.add("MSFT", {"i": k, "s": 70, "p": 400, "t": t0 + pd.Timedelta(milliseconds=50 * k)}) is None
+    # نفس الحجم بس السعر تغير = تنقطع
+    ice2 = StreakDetector(ALGO_ICE_MIN_STREAK, ALGO_ICE_MIN_SIZE, ALGO_ICE_MAX_SIZE,
+                          ALGO_ICE_MAX_GAP_SEC, ALGO_ICE_REALERT_MIN, same_price=True)
+    for k in range(1000):
+        assert ice2.add("AMD", {"i": k, "s": 1, "p": 150 + (k % 2) * 0.01,
+                                "t": t0 + pd.Timedelta(milliseconds=50 * k)}) is None
+    # فاصل أكثر من ثانيتين = تنقطع
+    for k in range(1000):
+        assert ice2.add("AAPL", {"i": k, "s": 1, "p": 200, "t": t0 + pd.Timedelta(seconds=3 * k)}) is None
+    print("ICEBERG TEST OK: 500 same-size same-price trades (1-10 shares)")
+    print(_ice_message("NVDA", got[0], 5_500_000_000_000))
+    print(_big_message("BIGCAP", big[0], 45_600_000_000))
 
 
 # ================== (7) الأخبار الإيجابية - ألباكا ==================
@@ -3302,7 +3720,9 @@ def main():
             fr = [n for on, n in ((ENABLE_IFVG_1H, "ساعة"), (ENABLE_IFVG_4H, "4 ساعات")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
-                      "الأقسام: الشورت صفر اللحظي + الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك + ماسح السيولة"
+                      "الأقسام: الشورت صفر اللحظي + الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك"
+                      + (" + خوارزميات الأسهم الكبيرة" if ALGO_BIG else "")
+                      + (" + الآيس بيرغ" if ALGO_BIG and ALGO_ICE else "") + " + ماسح السيولة"
                       + (" + سحب الجمعة/الاثنين (كول)" if ENABLE_FRIMON else "") + " + التجزئة العكسية"
                       f"{pw4h_txt}\n"
                       f"الوقت: {pd.Timestamp.now(tz=LOCAL_TZ):%Y-%m-%d %H:%M} (توقيتك)")

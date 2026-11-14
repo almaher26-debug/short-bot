@@ -204,7 +204,7 @@ FLOW_EVERY_MIN = 5               # كل كم دقيقة يفحص
 FLOW_SENT_FILE = "flow_sent.txt" # عشان ما يعيد نفس السهم بنفس اليوم
 
 # ---- (4ج) الشورت صفر اللحظي: الأسهم المتاحة للشورت وصلت صفر (Interactive Brokers كل 15 دقيقة) ----
-ENABLE_BORROW_ZERO = True  # True = شغال | False = مطفي
+ENABLE_BORROW_ZERO = False  # True = شغال | False = مطفي
 BZ_ZERO_ALERTS = False           # تنبيه "🚫 الشورت صفر" اللحظي: False = مطفي | True = يرجع
 BZ_SPREAD_24H = True             # True = التنبيهات تنقسم على 24 ساعة (وحدة كل 24÷BZ_MAX_PER_DAY = 22.5 دقيقة) | False = ترسل فوراً
 BZ_MAX_PER_DAY = 64              # أقصى عدد تنبيهات الشورت صفر باليوم | 0 = بدون حد
@@ -3720,7 +3720,7 @@ def main():
             fr = [n for on, n in ((ENABLE_IFVG_1H, "ساعة"), (ENABLE_IFVG_4H, "4 ساعات")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
-                      "الأقسام: الشورت صفر اللحظي + الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك"
+                      "الأقسام: " + ("الشورت صفر اللحظي + " if ENABLE_BORROW_ZERO else "") + "الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك"
                       + (" + خوارزميات الأسهم الكبيرة" if ALGO_BIG else "")
                       + (" + الآيس بيرغ" if ALGO_BIG and ALGO_ICE else "") + " + ماسح السيولة"
                       + (" + سحب الجمعة/الاثنين (كول)" if ENABLE_FRIMON else "") + " + التجزئة العكسية"

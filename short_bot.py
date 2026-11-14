@@ -5,7 +5,12 @@
 بوت التنبيهات - يشتغل على Railway ويرسل على تيليجرام
 =====================================================
 
-(1) الإنفيرجن IFVG - فريم ساعة و4 ساعات - قائمة المراقبة (WATCH_SYMBOLS)
+(1هـ) الإنفيرجن IFVG - قائمة المراقبة (منقول من gap_scanner) - شغال
+    - فريم ساعة: الجلسة الممتدة (4 الفجر - 8 بالليل نيويورك)، الجاب 16 سنت وفوق
+    - فريم 4 ساعات: 24 ساعة (الليل من ألباكا)، الجاب 10 سنت وفوق | الرسالة بدون الشموع
+    - ENABLE_WATCH_IFVG = False يطفيه (أو WATCH_IFVG_1H / WATCH_IFVG_4H لكل فريم)
+
+(1) الإنفيرجن IFVG (القديم، مع الشموع) - مطفي: ENABLE_IFVG = False
     - 🟢 صعودي: قاع الشمعة الأولى فوق قمة الثالثة (جاب)، الثانية تغطيه، والرابعة تقفل فوق أعلى الجاب
     - 🔴 هبوطي: نفس الشي بالعكس، والرابعة تقفل تحت أسفل الجاب | لون الشموع ما يهم
     - الجلسة الممتدة بدون الليلي (4 الفجر - 8 بالليل نيويورك)، شموع 4 ساعات: 4-8، 8-12، 12-4، 4-8
@@ -267,7 +272,7 @@ PW4H_WICK_ONLY = True  # True = الذيل بس يكسر المستوى، الا
 #   🔴 هبوطي: قمة الأولى تحت قاع الثالثة، والرابعة تقفل تحت أسفل الجاب (قمة الأولى)
 #   الجلسة الممتدة بدون الليلي (4 الفجر - 8 بالليل نيويورك)، شموع 4 ساعات: 4-8، 8-12، 12-4، 4-8
 #   يفحص بعد إغلاق كل ساعة بدقيقة (ويعيد بعد 5 و12 دقيقة لو بيانات ياهو تأخرت)
-ENABLE_IFVG = True               # True = شغال | False = مطفي (الفريمين)
+ENABLE_IFVG = False              # مطفي (14 نوفمبر 2026) - بداله (1هـ) تحت المنقول من gap_scanner
 ENABLE_IFVG_1H = True            # فريم ساعة
 ENABLE_IFVG_4H = True            # فريم 4 ساعات
 IFVG_1H_MIN_SIZE = 0.50          # أقل حجم للجاب - فريم ساعة (دولار)
@@ -276,6 +281,19 @@ IFVG_MIN_PRICE = 0               # أقل سعر سهم (0 = بدون شرط)
 IFVG_REQUIRE_MIDDLE_COVER = True # الشمعة الثانية لازم تغطي الجاب كامل
 IFVG_MAX_ALERT_DELAY_MIN = 30    # ما ينبه على شمعة قفلت من أكثر من كذا دقيقة
 IFVG_SHOW_CANDLES = True         # يكتب الشموع الأربع (وقت، أعلى، أقل) في التنبيه
+
+# ---- (1هـ) الإنفيرجن IFVG - قائمة المراقبة (منقول من gap_scanner، نفس تنبيهات COHR) ----
+#   نفس النموذج: ثلاث شموع بين ذيل الأولى والثالثة جاب، الثانية تغطيه كامل، والرابعة تقفل وراه
+#   فريم ساعة: الجلسة الممتدة (4 الفجر - 8 بالليل نيويورك)، الجاب 16 سنت وفوق
+#   فريم 4 ساعات: 24 ساعة نفس تريدنج فيو (الشموع تبدأ 8 بالليل: 8-12، 12-4، 4-8، 8-12، 12-4، 4-8)
+#     وبيانات الليل من ألباكا (feed=boats، نفس المفاتيح)، الجاب 10 سنت وفوق
+#   الرسالة بدون الشموع الأربع
+ENABLE_WATCH_IFVG = True         # True = شغال | False = مطفي
+WATCH_IFVG_1H = True             # فريم ساعة
+WATCH_IFVG_4H = True             # فريم 4 ساعات
+WATCH_MIN_SIZE = 0.16            # حجم الجاب (فريم الساعة): 16 سنت وفوق | 0 = بدون شرط
+WATCH4H_MIN_SIZE = 0.10          # حجم الجاب (فريم 4 ساعات): 10 سنت وفوق
+GAP_4H_24H = True                # فريم 4 ساعات: True = 24 ساعة (يحتاج مفاتيح ألباكا) | False = 4 الفجر - 8 بالليل
 
 # ---- (12) سحب السيولة الأسبوعي (دعم ← كول | مقاومة ← بوت) + العقد - الأسهم من 100$ إلى 350$ ----
 #   نفس شمعة السحب في (1ك-2)، بس الأسهم اللي سعرها داخل النطاق يجيها تنبيه واحد بالأسبوع (أول سحب، دعم أو مقاومة)
@@ -1962,6 +1980,175 @@ def ifvg_self_test():
     assert ifvg_scan_due(pd.Timestamp("2026-10-13 10:05", tz=NY), s1) is not None
     print("✅ وقت الفحص: بعد الساعة بدقيقة، ويعيد بعد 5 و12 دقيقة")
     print("IFVG TEST OK")
+    watch_ifvg_self_test()
+
+
+# ================== (1هـ) الإنفيرجن IFVG - قائمة المراقبة (منقول من gap_scanner) ==================
+def night_4h():
+    """فريم 4 ساعات يشتغل 24 ساعة؟ (الإعداد شغال + فيه مفاتيح ألباكا لبيانات الليل)"""
+    return GAP_4H_24H and bool(ALPACA_KEY and ALPACA_SECRET)
+
+
+def _watch_message(t, res, frame):
+    """رسالة قائمة المراقبة: IFVG مع الاتجاه 🟢 صعودي / 🔴 هبوطي (بدون الشموع)."""
+    lo, hi, px = (round(float(res[k]), 2) for k in ("gap_bottom", "gap_top", "price"))
+    closed_at = pd.Timestamp(res["end"]).tz_convert(LOCAL_TZ)
+    if res["side"] == "bull":
+        head, side = "🟢 Inversion Gap", f"الشمعة قفلت فوق أعلى الـ IFVG ({hi})"
+    else:
+        head, side = "🔴 Inversion Gap", f"الشمعة قفلت تحت أسفل الـ IFVG ({lo})"
+    return (f"{head} - {frame}\n"
+            f"السهم: ${t}\n"
+            f"IFVG: {lo} ← {hi}  (حجمه {hi - lo:.2f}$)\n"
+            f"{side}\n"
+            f"سعر الإغلاق: {px}\n"
+            f"وقت الإغلاق: {closed_at:%H:%M} (توقيتك)")
+
+
+# ---------- الجلسة الليلية من ألباكا (8 بالليل - 4 الفجر نيويورك) ----------
+_night_cache = {}   # الرمز -> (وقت الجلب، البيانات)
+
+
+def _alpaca_night_stale(fetched, now):
+    if fetched is None:
+        return True
+    if now.hour >= 20 or now.hour * 60 + now.minute < 4 * 60 + 20:
+        return fetched < now.floor(f"{GAP_BASE_MIN}min")   # وقت الليل: نجدد كل ربع ساعة
+    return fetched < now.normalize() + pd.Timedelta(hours=4, minutes=20)   # بعد الليل: نسخة وحدة تكفي
+
+
+def fetch_alpaca_night(symbols, now):
+    """شموع ربع ساعة للجلسة الليلية (8 بالليل - 4 الفجر) من ألباكا (feed=boats) لمجموعة أسهم.
+    يرجع {الرمز: DataFrame} أو None لو فشل."""
+    headers = {"APCA-API-KEY-ID": ALPACA_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET}
+    start = (now - pd.Timedelta(days=7)).tz_convert("UTC")
+    params = {"symbols": ",".join(symbols), "timeframe": f"{GAP_BASE_MIN}Min", "feed": "boats",
+              "start": start.strftime("%Y-%m-%dT%H:%M:%SZ"), "limit": 10000, "adjustment": "raw"}
+    if ALGO_DELAY_MIN:      # الباقة المجانية: بيانات الليل متأخرة 15 دقيقة
+        end = (now - pd.Timedelta(minutes=max(ALGO_DELAY_MIN, 16))).tz_convert("UTC")
+        params["end"] = end.strftime("%Y-%m-%dT%H:%M:%SZ")
+    raw = {}
+    for _ in range(50):                          # صفحات
+        _alpaca_wait()
+        try:
+            r = requests.get("https://data.alpaca.markets/v2/stocks/bars",
+                             headers=headers, params=params, timeout=30)
+        except Exception as e:
+            log("ألباكا (الليل): فشل الاتصال -", e)
+            return None
+        if r.status_code == 429:
+            time.sleep(10)
+            continue
+        if r.status_code != 200:
+            log(f"ألباكا (الليل): خطأ {r.status_code} - {r.text[:200]}")
+            return None
+        data = r.json()
+        for sym, bars in (data.get("bars") or {}).items():
+            raw.setdefault(sym, []).extend(bars or [])
+        token = data.get("next_page_token")
+        if not token:
+            break
+        params["page_token"] = token
+    out = {}
+    for sym in symbols:
+        bars = raw.get(sym) or []
+        if not bars:
+            out[sym] = pd.DataFrame(columns=OHLC)
+            continue
+        df = pd.DataFrame(bars)
+        idx = pd.DatetimeIndex(pd.to_datetime(df["t"], utc=True)).tz_convert(NY)
+        df = df.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close"})
+        df = df.set_index(idx)[OHLC].astype(float).dropna()
+        h = df.index.hour
+        out[sym] = df[(h >= 20) | (h < 4)]       # الليل بس، الباقي من ياهو
+    return out
+
+
+def load_night(tickers, now):
+    """بيانات الليل لكل الأسهم (المؤشرات ما لها جلسة ليلية) - تتخزن وتتجدد بس لما تقدم."""
+    tickers = stocks_only(tickers)
+    need = [t for t in tickers if _alpaca_night_stale((_night_cache.get(t) or (None,))[0], now)]
+    got = 0
+    for i in range(0, len(need), 200):
+        res = fetch_alpaca_night(need[i:i + 200], now)
+        if res is None:
+            continue
+        for t, df in res.items():
+            _night_cache[t] = (now, df)
+            got += 1
+    if need:
+        log(f"الجلسة الليلية: جددت {got} سهم من ألباكا")
+    return {t: v[1] for t, v in _night_cache.items()}
+
+
+def watch_4h_due(now):
+    """شمعة 4 ساعات تقفل كل 4 ساعات بالضبط (0، 4، 8، 12، 16، 20 نيويورك) - أول نص ساعة بعدها."""
+    return now.hour % 4 == 0 and now.minute < 30
+
+
+def scan_watch_ifvg(symbols, sent, now=None, do_1h=True, do_4h=True):
+    """(1هـ) IFVG قائمة المراقبة: ساعة (الجلسة الممتدة) + 4 ساعات (24 ساعة مع الليل من ألباكا)."""
+    now = now or pd.Timestamp.now(tz=NY)
+    ov4 = night_4h()
+    frames = [(do_4h and WATCH_IFVG_4H, 240, "w4h", "فريم 4 ساعات", WATCH4H_MIN_SIZE, ov4),
+              (do_1h and WATCH_IFVG_1H, 60, "w1h", "فريم ساعة", WATCH_MIN_SIZE, False)]
+    frames = [f for f in frames if f[0]]
+    if not frames:
+        return
+    night = load_night(symbols, now) if any(f[5] for f in frames) else {}
+    hits = 0
+    for t, df in download_batches(symbols, 100, period="7d", interval=f"{GAP_BASE_MIN}m", prepost=True):
+        try:
+            df = to_ny(df)[OHLC]
+            if df.empty:
+                continue
+            last_bar = df.index.max()
+            n = night.get(t)
+            df24 = df
+            if n is not None and not n.empty:
+                df24 = pd.concat([df, n])
+                df24 = df24[~df24.index.duplicated(keep="first")].sort_index()
+            for _, minutes, tag, label, min_size, ov in frames:
+                src = df24 if ov else df
+                res = check_ifvg(only_closed(to_frame(src, minutes, overnight=ov), src.index.max(), now))
+                if not res or round(res["gap_top"] - res["gap_bottom"], 2) < min_size:
+                    continue
+                if (now - pd.Timestamp(res["end"])).total_seconds() / 60 > IFVG_MAX_ALERT_DELAY_MIN:
+                    continue                    # شمعة قديمة، مو إغلاق جديد
+                key = f"{t}-{tag}-{res['side']}-{res['candle_time']}"
+                if key in sent:
+                    continue
+                sent.add(key)
+                _append_line(GAP_SENT_FILE, key)
+                hits += 1
+                send_telegram(_watch_message(t, res, label), kind="gap", sym=t)
+        except Exception as e:
+            log(f"الإنفيرجن (قائمة المراقبة): {t}: خطأ - {e}")
+    free_memory()
+    log(f"[{datetime.now():%H:%M}] الإنفيرجن (قائمة المراقبة): خلص الفحص - {hits} تنبيه جديد")
+
+
+def watch_ifvg_self_test():
+    """يجرب (1هـ) بدون نت: الرسالة وشموع 4 ساعات 24 ساعة ووقت الفحص."""
+    flat = pd.DataFrame({"Open": 1.0, "High": 1.0, "Low": 1.0, "Close": 1.0},
+                        index=pd.date_range("2026-10-13 00:00", "2026-10-13 23:45", freq="15min", tz=NY))
+    hrs = [f"{x:%H}" for x in to_frame(flat, 240, overnight=True).index]
+    assert hrs == ["00", "04", "08", "12", "16", "20"], hrs
+    print("✅ (1هـ) شموع 4 ساعات 24 ساعة: تبدأ 8 بالليل نيويورك (8، 12، 4، 8، 12، 4)")
+    assert watch_4h_due(pd.Timestamp("2026-10-13 08:01", tz=NY))
+    assert not watch_4h_due(pd.Timestamp("2026-10-13 09:01", tz=NY))
+    print("✅ (1هـ) فريم 4 ساعات يفحص بس بعد إغلاق شمعته")
+    idx = pd.date_range("2026-11-13 00:00", periods=4, freq="4h", tz=NY)
+    c = pd.DataFrame({"Open": [193, 193.2, 192.3, 192.2], "High": [193.5, 193.4, 192.48, 196.2],
+                      "Low": [192.8, 192.3, 191.9, 192.0], "Close": [193.1, 192.5, 192.2, 195.9]}, index=idx)
+    c["end"] = c.index + pd.Timedelta(hours=4)
+    r = check_ifvg(c)
+    assert r and r["side"] == "bull" and round(r["gap_top"] - r["gap_bottom"], 2) == 0.32, r
+    assert round(r["gap_top"] - r["gap_bottom"], 2) >= WATCH4H_MIN_SIZE
+    msg = _watch_message("COHR", r, "فريم 4 ساعات")
+    assert "الشموع" not in msg
+    print("✅ (1هـ) جاب 0.32$ على 4 ساعات = ينبه، والرسالة بدون الشموع:")
+    print(msg)
 
 
 # ================== (12) سحب السيولة الأسبوعي (فريم 4 ساعات) + العقد ==================
@@ -3719,6 +3906,9 @@ def main():
         if ENABLE_IFVG and (ENABLE_IFVG_1H or ENABLE_IFVG_4H):
             fr = [n for on, n in ((ENABLE_IFVG_1H, "ساعة"), (ENABLE_IFVG_4H, "4 ساعات")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
+        if ENABLE_WATCH_IFVG and (WATCH_IFVG_1H or WATCH_IFVG_4H):
+            fr = [n for on, n in ((WATCH_IFVG_1H, "ساعة"), (WATCH_IFVG_4H, "4 ساعات")) if on]
+            pw4h_txt += f" + الإنفيرجن IFVG قائمة المراقبة فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
                       "الأقسام: " + ("الشورت صفر اللحظي + " if ENABLE_BORROW_ZERO else "") + "الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك"
                       + (" + خوارزميات الأسهم الكبيرة" if ALGO_BIG else "")
@@ -3738,6 +3928,7 @@ def main():
 
     pwl_last = 0.0
     ifvg_last = None
+    watch_last = None
     was_open = None
     gap_sent = _load_set(GAP_SENT_FILE)       # مفاتيح تنبيهات سحب الأسبوع السابق (4 ساعات)
     flow_tickers, flow_day, flow_last = [], None, 0.0
@@ -3761,6 +3952,19 @@ def main():
             if once or (slot is not None and us_market_open(now_ny, overnight=False)):
                 scan_ifvg(list(WATCH_SYMBOLS), gap_sent, now_ny)
                 ifvg_last = slot or now_ny
+
+        # (1هـ) الإنفيرجن IFVG - قائمة المراقبة (من gap_scanner) - بعد إغلاق كل ساعة بدقيقة
+        #   ساعة: الجلسة الممتدة | 4 ساعات: 24 ساعة بعد إغلاق كل شمعة 4 ساعات
+        if ENABLE_WATCH_IFVG and (WATCH_IFVG_1H or WATCH_IFVG_4H):
+            now_ny = pd.Timestamp.now(tz=NY)
+            slot = ifvg_scan_due(now_ny, watch_last)
+            if once or slot is not None:
+                day = us_market_open(now_ny, overnight=False)
+                do_4h = watch_4h_due(now_ny) and (day or (night_4h() and us_market_open(now_ny, overnight=True)))
+                if once or day or do_4h:
+                    scan_watch_ifvg(list(WATCH_SYMBOLS), gap_sent, now_ny,
+                                    do_1h=once or day, do_4h=once or do_4h)
+                watch_last = slot or now_ny
 
         # (2) ماسح السيولة - وقت السوق الرسمي، كل 5 دقايق
         if ENABLE_FLOW and (regular_session_open() or once) \

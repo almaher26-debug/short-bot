@@ -8,6 +8,7 @@
 (1هـ) الإنفيرجن IFVG - قائمة المراقبة (منقول من gap_scanner) - شغال
     - فريم ساعة: الجلسة الممتدة (4 الفجر - 8 بالليل نيويورك)، الجاب 16 سنت وفوق
     - فريم 4 ساعات: 24 ساعة (الليل من ألباكا)، الجاب 10 سنت وفوق | الرسالة بدون الشموع
+    - تمركز القاما تحت التنبيه (IFVG_GAMMA = False يشيله)
     - ENABLE_WATCH_IFVG = False يطفيه (أو WATCH_IFVG_1H / WATCH_IFVG_4H لكل فريم)
 
 (1) الإنفيرجن IFVG (القديم، مع الشموع) - مطفي: ENABLE_IFVG = False
@@ -91,11 +92,12 @@
     - التنبيه: كول مع الأهداف والوقف وعقد كول مدته أسبوعين
     - الأسهم: قائمة المراقبة اللي سعرها 100$-400$ | ENABLE_FRIMON = False يطفيه
 
-(12) سحب السيولة الأسبوعي - فريم 4 ساعات + العقد - قائمة المراقبة اللي سعرها 100$-350$
-    - نفس شمعة (1ك-2): سحب دعم الأسبوع السابق → كول | سحب مقاومة الأسبوع السابق → بوت
-    - تنبيه واحد بس لكل سهم بالأسبوع (أول سحب، دعم أو مقاومة)
-    - العقد: أكثر من 10 أيام، حجم تداول فوق 500، عقود مفتوحة فوق 1000، دلتا فوق 0.1200
-    - الأسهم برا 100$-350$ تكمل على (1ك-2) بدون عقد | ENABLE_WKOPT = False يطفيه
+(12) سحب السيولة الأسبوعي - فريم 6 ساعات (4-10، 10-4، 4-8 نيويورك) + العقد - كل قائمة المراقبة (بدون شرط سعر)
+    - نفس شمعة السحب على فريم 6 ساعات: سحب دعم الأسبوع السابق → كول | سحب مقاومة الأسبوع السابق → بوت
+    - WKOPT_PUT_ONLY = True = البوت بس (الكول يرجع على (1ك-2) بدون عقد)
+    - تنبيه واحد بس لكل سهم بالأسبوع
+    - العقد: أكثر من 10 أيام، حجم تداول فوق 500، عقود مفتوحة فوق 1000، دلتا فوق 0.1200 + قاما العقد
+    - لو ما لقى عقد بالشروط ينبه بدونه | المؤشرات (سباكس) تكمل على (1ك-2) فريم 4 ساعات | ENABLE_WKOPT = False يطفيه
 
 التشغيل:
   pip install yfinance pandas requests lxml
@@ -153,33 +155,20 @@ GAP_OVERNIGHT = bool(TIINGO_TOKEN)   # يتفعل لحاله لو حطيت ال�
 # ⭐ قائمتك الموحدة (قائمة المراقبة) - عليها سحب الأسبوع السابق 4 ساعات وسحب الجمعة/الاثنين
 TEST_ON_START = True             # True = يرسل رسالة اختبار كل ما البوت يشتغل | False = بدون
 ONE_LIST = False  # True = كل الأقسام على القائمة هذي | False = كل قسم يرجع لأسهمه القديمة
-WATCH_SYMBOLS = [
-    "NVDA", "CRM", "AVGO", "META", "TSLA", "SPCX", "AMD", "LITE", "FICO", "AAPL",
-    "RKLB", "UNH", "MU", "LLY", "ADBE", "QCOM", "SHOP", "GOOGL", "MSFT", "MSTR",
-    "AMZN", "DDOG", "ACN", "GEV", "LRCX", "PLTR", "OKTA", "ORCL", "INTC", "AAOI",
-    "CRDO", "SNDK", "STX", "CRCL", "WDC", "SKHY", "NBIS", "CRWV", "CRWD", "MRVL",
-    "ARM", "AMAT", "PANW", "SNOW", "NOW", "DELL", "FSLR", "ENPH", "VRT", "RIVN",
-    "KLAC", "MCHP", "FTNT", "ADSK", "MDB", "CSCO", "CLS", "BE", "MOD", "TEM",
-    "CELH", "CHWY", "CROX", "GRMN", "CTSH", "BBIO", "DOCS", "ADMA", "CTAS", "MSM",
-    "SMH", "ABBV", "HAS", "KO", "LULU", "APH", "SNPS", "IBM", "ORLY", "HD",
-    # إعلانات أرباح أسبوع 2 نوفمبر 2026 (الموجودة فوق ما تكررت)
-    "AEHR", "APP", "DIBS", "TXG", "SMCI", "MRNA", "AMC", "NVTS", "KTOS", "CHKP",
-    "COHR", "UBER", "NET", "VSH", "BMRN", "FSLY", "ANET", "CAVA", "EL", "CIFR",
-    "PFE", "OKLO", "ETN", "ABNB", "NVO", "TEAM", "BKNG", "RIOT", "IREN", "U",
-    "MP", "GFS", "FN", "MPC", "BXSL", "ALAB", "RUN", "BROS", "FISV",
-    # باقي أسهم صورة الأرباح (أعمدة الأيام الخمسة)
-    "NSSC", "ETR", "MAR", "PEG", "TSEM", "KRYS", "LIFE", "ON", "ROKU", "O",
-    "CALX", "DT", "DOCN", "ET", "APO", "BNTX", "HL", "AMGN", "OUST", "CAR",
-    "MCD", "CVS", "CAI", "CAH", "IOVA", "EOSE", "CORZ", "CI", "TAP", "UUUU",
-    "CHTR", "WULF", "ELAN", "HUM", "DTI", "BLMN", "PAA", "UAA",
-    # أُضيفت 6 نوفمبر 2026
-    "TSM", "BABA",
-    # أُضيفت 7 نوفمبر 2026
-    "AKAM", "BA",
+WATCH_SYMBOLS = [   # قائمتك (15 نوفمبر 2026) - 81 سهم + QQQ + SPY + سباكس
+    "NVDA", "CRM", "AVGO", "META", "TSLA", "SPCX", "AMD", "LITE", "AAPL", "RKLB",
+    "UNH", "MU", "LLY", "ADBE", "QCOM", "SHOP", "GOOGL", "MSFT", "MSTR", "AMZN",
+    "DDOG", "ACN", "GEV", "LRCX", "PLTR", "OKTA", "ORCL", "INTC", "AAOI", "CRDO",
+    "SNDK", "STX", "CRCL", "WDC", "SKHY", "NBIS", "CRWV", "CRWD", "MRVL", "ARM",
+    "AMAT", "PANW", "SNOW", "NOW", "DELL", "ENPH", "VRT", "RIVN", "KLAC", "MCHP",
+    "FTNT", "ADSK", "MDB", "CSCO", "CLS", "BE", "MOD", "TEM", "CELH", "CHWY",
+    "CROX", "GRMN", "CTSH", "BBIO", "DOCS", "ADMA", "CTAS", "MSM", "SMH", "ABBV",
+    "HAS", "KO", "LULU", "APH", "SNPS", "IBM", "ORLY", "HD", "MRNA", "SMCI",
+    "TEAM",
     # صناديق
     "QQQ", "SPY",
-    # مؤشرات (من ياهو): سباكس S&P 500 + ناسداك 100
-    "^GSPC", "^NDX",
+    # مؤشرات (من ياهو): سباكس S&P 500
+    "^GSPC",
 ]
 # المؤشرات ما لها صفقات ولا بيانات في ألباكا، فتنشال من أقسام ألباكا (الخوارزميات، الزخم، الجلسة الليلية)
 INDEX_SYMBOLS = {"^GSPC", "^NDX"}
@@ -293,20 +282,25 @@ WATCH_IFVG_1H = True             # فريم ساعة
 WATCH_IFVG_4H = True             # فريم 4 ساعات
 WATCH_MIN_SIZE = 0.16            # حجم الجاب (فريم الساعة): 16 سنت وفوق | 0 = بدون شرط
 WATCH4H_MIN_SIZE = 0.10          # حجم الجاب (فريم 4 ساعات): 10 سنت وفوق
-GAP_4H_24H = True                # فريم 4 ساعات: True = 24 ساعة (يحتاج مفاتيح ألباكا) | False = 4 الفجر - 8 بالليل
+IFVG_GAMMA = True                # يضيف تمركز القاما لتنبيهات الإنفيرجن (القسمين) | False = بدون
+GAP_4H_24H = True               # فريم 4 ساعات: True = 24 ساعة (يحتاج مفاتيح ألباكا) | False = 4 الفجر - 8 بالليل
 
 # ---- (12) سحب السيولة الأسبوعي (دعم ← كول | مقاومة ← بوت) + العقد - الأسهم من 100$ إلى 350$ ----
 #   نفس شمعة السحب في (1ك-2)، بس الأسهم اللي سعرها داخل النطاق يجيها تنبيه واحد بالأسبوع (أول سحب، دعم أو مقاومة)
 #   ومعه عقد بالشروط تحت. الأسهم برا النطاق تكمل على (1ك-2) مثل قبل.
-ENABLE_WKOPT = False             # True = شغال | False = مطفي (كل الأسهم ترجع على (1ك-2) بدون عقد)
-WKOPT_MIN_PRICE = 100            # سعر السهم من
-WKOPT_MAX_PRICE = 350            # إلى
+ENABLE_WKOPT = True              # True = شغال | False = مطفي (كل الأسهم ترجع على (1ك-2) بدون عقد)
+WKOPT_PUT_ONLY = False           # True = البوت بس (سحب المقاومة) | False = كول وبوت
+                                 #   الكول (سحب الدعم) يرجع على (1ك-2) بدون عقد
+WKOPT_FRAME_MIN = 360            # فريم القسم: 360 = 6 ساعات (4-10، 10-4، 4-8 نيويورك بدون الليلي) | 240 = 4 ساعات
+WKOPT_FRAME_TXT = f"فريم {WKOPT_FRAME_MIN // 60} ساعات"
+WKOPT_MIN_PRICE = 0              # سعر السهم من (0 = بدون حد) — الحين كل قائمة المراقبة
+WKOPT_MAX_PRICE = 0              # إلى (0 = بدون حد) — مثال: 100 و 350 يرجع النطاق القديم
 WKOPT_OPT_MIN_DTE = 10           # العقد أكثر من 10 أيام (يختار أقرب انتهاء بعدها)
 WKOPT_OPT_MAX_DTE = 45           # أبعد انتهاء يدوّر فيه
 WKOPT_OPT_MIN_VOLUME = 500       # حجم التداول في العقد فوق 500
 WKOPT_OPT_MIN_OI = 1000          # العقود المفتوحة (الكمية غير إغلاق المركز) فوق 1000
 WKOPT_OPT_MIN_DELTA = 0.12       # الدلتا فوق 0.1200 (للبوت: القيمة المطلقة)
-WKOPT_REQUIRE_CONTRACT = True    # True = ما ينبه إلا لو لقى عقد بالشروط | False = ينبه حتى بدون عقد
+WKOPT_REQUIRE_CONTRACT = False   # True = ما ينبه إلا لو لقى عقد بالشروط | False = ينبه حتى بدون عقد
 # ---- تمركز القاما للعقود مع تنبيه سحب السيولة (1ك-2) و (12) ----
 #   من سلسلة عقود ياهو (العقود المفتوحة + IV): قاما كل سترايك × العقود المفتوحة × 100 × السعر² × 1%
 #   الكول موجب والبوت سالب. يطلع: جدار الكول، جدار البوت، أعلى السترايكات، صافي القاما، ونقطة الانقلاب
@@ -1774,7 +1768,7 @@ def scan_pwl_4h(symbols, sent):
     now = pd.Timestamp.now(tz=NY)
     wk0 = _week_start(now)
     checks4h = []
-    if ENABLE_PWL_4H or ENABLE_WKOPT:
+    if ENABLE_PWL_4H or (ENABLE_WKOPT and not WKOPT_PUT_ONLY):
         checks4h.append(("low", "pwl4h", check_pwl_1h, ENABLE_PWL_4H))
     if ENABLE_PWH_4H or ENABLE_WKOPT:
         checks4h.append(("high", "pwh4h", check_pwh_1h, ENABLE_PWH_4H))
@@ -1793,14 +1787,18 @@ def scan_pwl_4h(symbols, sent):
                 continue
             # overnight=False: شموع 4-8، 8-12، 12-4، 4-8 (بري + ماركت + أفتر) بدون الليلي
             c4h = only_closed(to_frame(df, 240, overnight=False), df.index.max(), now)
+            # (12) فريم 6 ساعات (WKOPT_FRAME_MIN): 4-10، 10-4، 4-8 نيويورك بدون الليلي
+            cwk = (only_closed(to_frame(df, WKOPT_FRAME_MIN, overnight=False), df.index.max(), now)
+                   if ENABLE_WKOPT else c4h)
+            spot = float(df["Close"].iloc[-1])
             wk_key = f"{t}-wkopt-{wk0:%Y%m%d}"     # (12) تنبيه واحد لكل سهم بالأسبوع
             for side, tag, fn, old_on in checks4h:
                 lvl, lvl_day = lv4[side]
-                r = fn(c4h, lvl, wk0, wick_only=PW4H_WICK_ONLY)
-                if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
-                    continue
-                # ---- (12) الأسهم من 100$ إلى 350$: تنبيه واحد بالأسبوع + العقد ----
-                if wkopt_in_range(r["close"]):
+                # ---- (12) الأسهم من 100$ إلى 350$: تنبيه واحد بالأسبوع + العقد (البوت بس لو WKOPT_PUT_ONLY) ----
+                if wkopt_in_range(spot) and t not in INDEX_SYMBOLS and (side == "high" or not WKOPT_PUT_ONLY):
+                    r = fn(cwk, lvl, wk0, wick_only=PW4H_WICK_ONLY)
+                    if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
+                        continue
                     if wk_key in sent:
                         break
                     put = side == "high"
@@ -1818,6 +1816,9 @@ def scan_pwl_4h(symbols, sent):
                     send_telegram(with_gamma(wkopt_message(t, side, lvl, lvl_day, r, opt), t, r["close"]),
                                   kind="sweep", sym=t)
                     break
+                r = fn(c4h, lvl, wk0, wick_only=PW4H_WICK_ONLY)
+                if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
+                    continue
                 key = f"{t}-{tag}-{wk0:%Y%m%d}"
                 if old_on and key not in sent:
                     sent.add(key)
@@ -1919,7 +1920,10 @@ def scan_ifvg(symbols, sent, now=None):
                 sent.add(key)
                 _append_line(GAP_SENT_FILE, key)
                 hits += 1
-                send_telegram(_ifvg_message(t, res, label), kind="gap", sym=t)
+                msg = _ifvg_message(t, res, label)
+                if IFVG_GAMMA:
+                    msg = with_gamma(msg, t, res["price"])
+                send_telegram(msg, kind="gap", sym=t)
         except Exception as e:
             log(f"الإنفيرجن: {t}: خطأ - {e}")
     free_memory()
@@ -2121,7 +2125,10 @@ def scan_watch_ifvg(symbols, sent, now=None, do_1h=True, do_4h=True):
                 sent.add(key)
                 _append_line(GAP_SENT_FILE, key)
                 hits += 1
-                send_telegram(_watch_message(t, res, label), kind="gap", sym=t)
+                msg = _watch_message(t, res, label)
+                if IFVG_GAMMA:
+                    msg = with_gamma(msg, t, res["price"])
+                send_telegram(msg, kind="gap", sym=t)
         except Exception as e:
             log(f"الإنفيرجن (قائمة المراقبة): {t}: خطأ - {e}")
     free_memory()
@@ -2153,7 +2160,9 @@ def watch_ifvg_self_test():
 
 # ================== (12) سحب السيولة الأسبوعي (فريم 4 ساعات) + العقد ==================
 def wkopt_in_range(price):
-    return ENABLE_WKOPT and WKOPT_MIN_PRICE <= float(price) <= WKOPT_MAX_PRICE
+    p = float(price)
+    return (ENABLE_WKOPT and (not WKOPT_MIN_PRICE or p >= WKOPT_MIN_PRICE)
+            and (not WKOPT_MAX_PRICE or p <= WKOPT_MAX_PRICE))
 
 
 def wkopt_pick_option(t, spot, put):
@@ -2185,25 +2194,38 @@ def wkopt_message(t, side, lvl, lvl_day, r, opt):
     put = side == "high"
     kind = "بوت" if put else "كول"
     head = "🔴 بوت — سحب سيولة مقاومة أسبوعية" if put else "🟢 كول — سحب سيولة دعم أسبوعي"
-    lines = [head, _pwl_message(t, side, lvl, lvl_day, r, frame="فريم 4 ساعات", trade=True), ""]
+    lines = [head, _pwl_message(t, side, lvl, lvl_day, r, frame=WKOPT_FRAME_TXT, trade=True), ""]
     if opt:
         c, vol, oi = opt
-        exp, k, delta, bid, ask, sym, iv = c[:7]
+        exp, k, delta, bid, ask, sym, iv, gamma = c[:8]
         days = (exp - pd.Timestamp.now(tz=NY).date()).days
         mid = (bid + ask) / 2 if bid else ask
+        g_src = ""
+        if not gamma:                                   # المصدر ما أعطاها (ياهو) → بلاك شولز
+            gamma = _bs_gamma(float(r["close"]), k, _opt_years(exp), iv) or None
+            g_src = " (محسوبة)" if gamma else ""
+        g_line = ""
+        if gamma:
+            g_line = (f"القاما: {gamma:.4f}{g_src} — كل 1$ حركة بالسهم تغيّر الدلتا "
+                      f"{gamma:.4f} (≈ {gamma * 100:.2f} دلتا للعقد كامل)")
         lines += [f"📄 العقد: {t} {kind} {k:g} — انتهاء {exp:%Y-%m-%d} ({days} يوم)",
                   f"السعر الحين: {mid:.2f}$ (العقد كامل {mid * 100:,.0f}$) | بيد {bid or 0:.2f} / أسك {ask:.2f}",
-                  f"الدلتا: {delta:.4f}" + (f" | IV: {iv * 100:.0f}%" if iv else ""),
-                  f"حجم التداول: {int(vol):,} | العقود المفتوحة: {int(oi):,}"]
+                  f"الدلتا: {delta:.4f}" + (f" | IV: {iv * 100:.0f}%" if iv else "")]
+        if g_line:
+            lines.append(g_line)
+        lines.append(f"حجم التداول: {int(vol):,} | العقود المفتوحة: {int(oi):,}")
     else:
         lines.append(f"📄 العقد: ما لقيت {kind} بالشروط")
     lines.append(f"(شروط العقد: أكثر من {WKOPT_OPT_MIN_DTE} أيام، حجم فوق {WKOPT_OPT_MIN_VOLUME}، "
                  f"عقود مفتوحة فوق {WKOPT_OPT_MIN_OI:,}، دلتا فوق {WKOPT_OPT_MIN_DELTA:.4f})")
-    lines += ["", "⚠️ محتوى تعليمي — تداول وهمي، ليست توصية للشراء."]
+    lines += ["", WKOPT_CHECK_LINE, "", "⚠️ محتوى تعليمي — تداول وهمي، ليست توصية للشراء."]
     return "\n".join(lines)
 
 
-WKOPT_TEST_ID = "1"   # رسالة تجريبية مرة وحدة بعد الرفع — غيّر الرقم لو تبي وحدة ثانية
+WKOPT_CHECK_LINE = "🔎 حلل السهم وتأكد من الاتجاه"
+
+
+WKOPT_TEST_ID = "3" # رسالة تجريبية مرة وحدة بعد الرفع — غيّر الرقم لو تبي وحدة ثانية
 
 
 def wkopt_send_test_once():
@@ -2227,10 +2249,11 @@ def wkopt_send_test_once():
               "start": now.floor("h"), "end": now, "closes_beyond": 0, "first_touch": True}
     put = ((exp, 245.0, -0.2870, 3.10, 3.25, "TEST", 0.41, 0.03, 960, "test"), 960, 3400)
     note = "🧪 رسالة تجريبية - هذا مو تنبيه حقيقي (السهم والأرقام وهمية)\n\n"
-    send_telegram(note + wkopt_message("TEST", "low", 180.20, lvl_day, r_low, call), kind="sweep")
-    time.sleep(1)
+    if not WKOPT_PUT_ONLY:
+        send_telegram(note + wkopt_message("TEST", "low", 180.20, lvl_day, r_low, call), kind="sweep")
+        time.sleep(1)
     send_telegram(note + wkopt_message("TEST", "high", 249.80, lvl_day, r_high, put)
-                  + "\n\nلو وصلتك الرسالتين، تنبيهات القسم الحقيقية بتوصل لنفس المكان.", kind="sweep")
+                  + "\n\nلو وصلتك هالرسالة، تنبيهات القسم الحقيقية بتوصل لنفس المكان.", kind="sweep")
     try:
         with open(marker, "w", encoding="utf-8") as f:
             f.write(WKOPT_TEST_ID)
@@ -2259,8 +2282,12 @@ def wkopt_self_test():
         got = wkopt_pick_option("TEST", 200, True)
         assert got and got[0][5] == "E" and got[2] == 1500, got
         print("✅ العقد: أكثر من 10 أيام + حجم فوق 500 + مفتوحة فوق 1000 + دلتا فوق 0.12 → E")
-        assert wkopt_in_range(100) and wkopt_in_range(350) and not wkopt_in_range(351) and not wkopt_in_range(99)
-        print("✅ نطاق السعر 100$-350$")
+        if WKOPT_MIN_PRICE and WKOPT_MAX_PRICE:
+            assert wkopt_in_range(WKOPT_MIN_PRICE) and not wkopt_in_range(WKOPT_MAX_PRICE + 1)
+            print(f"✅ نطاق السعر {WKOPT_MIN_PRICE}$-{WKOPT_MAX_PRICE}$")
+        else:
+            assert wkopt_in_range(5) and wkopt_in_range(900)
+            print("✅ بدون شرط سعر: كل قائمة المراقبة")
         r = {"open": 201.0, "high": 203.5, "low": 199.8, "close": 200.4, "depth": 0.9,
              "start": pd.Timestamp.now(tz=NY).floor("h"), "end": pd.Timestamp.now(tz=NY),
              "closes_beyond": 0, "first_touch": True}
@@ -2500,8 +2527,15 @@ def _bs_gamma(spot, strike, years, iv):
     return math.exp(-d1 * d1 / 2) / math.sqrt(2 * math.pi) / (spot * sq)
 
 
-def _gamma_rows(t, spot):
-    """[(سترايك، سنوات، IV، العقود المفتوحة، كول؟)] من ياهو لأقرب الانتهاءات، والانتهاءات المستخدمة."""
+GAMMA_CACHE_MIN = 30             # سلسلة العقود لكل سهم تتخزن كذا دقيقة (الإنفيرجن ينبه كثير، فما نعيد التحميل كل مرة)
+_GAMMA_CACHE = {}                # الرمز -> (وقت التحميل، [(سترايك، انتهاء، IV، مفتوحة، كول؟)]، الانتهاءات)
+
+
+def _gamma_chain(t):
+    """سلسلة عقود ياهو لأقرب الانتهاءات (محفوظة GAMMA_CACHE_MIN دقيقة)."""
+    hit = _GAMMA_CACHE.get(t)
+    if hit and time.time() - hit[0] < GAMMA_CACHE_MIN * 60:
+        return hit[1], hit[2]
     import yfinance as yf
     today = pd.Timestamp.now(tz=NY).date()
     last = today + timedelta(days=GAMMA_MAX_DTE)
@@ -2509,19 +2543,29 @@ def _gamma_rows(t, spot):
         tk = yf.Ticker(t)
         exps = [e for e in (tk.options or []) if today <= pd.Timestamp(e).date() <= last]
     exps = sorted(exps)[:GAMMA_MAX_EXPS]
-    lo, hi = spot * (1 - GAMMA_RANGE_PCT / 100), spot * (1 + GAMMA_RANGE_PCT / 100)
-    rows = []
+    chain = []
     for e in exps:
         with _YF_LOCK:
             ch = tk.option_chain(e)
-        yrs = _opt_years(pd.Timestamp(e).date())
+        exp = pd.Timestamp(e).date()
         for df, is_call in ((ch.calls, True), (ch.puts, False)):
             for x in df.itertuples():
-                k = float(x.strike)
                 oi = 0 if pd.isna(x.openInterest) else int(x.openInterest)
                 iv = 0 if pd.isna(x.impliedVolatility) else float(x.impliedVolatility)
-                if lo <= k <= hi and oi > 0 and iv > 0.01:
-                    rows.append((k, yrs, iv, oi, is_call))
+                if oi > 0 and iv > 0.01:
+                    chain.append((float(x.strike), exp, iv, oi, is_call))
+    if len(_GAMMA_CACHE) > 500:
+        _GAMMA_CACHE.clear()
+    _GAMMA_CACHE[t] = (time.time(), chain, exps)
+    return chain, exps
+
+
+def _gamma_rows(t, spot):
+    """[(سترايك، سنوات، IV، العقود المفتوحة، كول؟)] داخل ±GAMMA_RANGE_PCT% من السعر، والانتهاءات المستخدمة."""
+    chain, exps = _gamma_chain(t)
+    lo, hi = spot * (1 - GAMMA_RANGE_PCT / 100), spot * (1 + GAMMA_RANGE_PCT / 100)
+    yrs = {e: _opt_years(e) for e in {x[1] for x in chain}}
+    rows = [(k, yrs[e], iv, oi, c) for k, e, iv, oi, c in chain if lo <= k <= hi]
     return rows, exps
 
 
@@ -2595,6 +2639,9 @@ def with_gamma(msg, t, spot):
         return msg
     if not g:
         return msg
+    if "\n" + WKOPT_CHECK_LINE in msg:                 # القاما قبل سطر "حلل السهم" عشان يكون بالأخير
+        a, b = msg.rsplit("\n" + WKOPT_CHECK_LINE, 1)
+        return a.rstrip() + "\n\n" + g + "\n\n" + WKOPT_CHECK_LINE + b
     if "\n⚠️" in msg:
         a, b = msg.rsplit("\n⚠️", 1)
         return a.rstrip() + "\n\n" + g + "\n\n⚠️" + b
@@ -3901,8 +3948,9 @@ def main():
         pw4h_txt = (f" + سحب {' و'.join(pw4h)} الأسبوع السابق 4 ساعات (كول/بوت، {len(WATCH_SYMBOLS)} رمز)"
                     if pw4h else "")
         if ENABLE_WKOPT:
-            pw4h_txt += (f" + سحب السيولة الأسبوعي 4 ساعات مع عقد (الأسهم {WKOPT_MIN_PRICE}$-{WKOPT_MAX_PRICE}$، "
-                         "تنبيه واحد لكل سهم بالأسبوع)")
+            pw4h_txt += (f" + سحب السيولة الأسبوعي {WKOPT_FRAME_MIN // 60} ساعات مع عقد{' بوت بس' if WKOPT_PUT_ONLY else ''} "
+                         + (f"(الأسهم {WKOPT_MIN_PRICE}$-{WKOPT_MAX_PRICE}$، " if WKOPT_MAX_PRICE else "(كل القائمة، ")
+                         + "تنبيه واحد لكل سهم بالأسبوع)")
         if ENABLE_IFVG and (ENABLE_IFVG_1H or ENABLE_IFVG_4H):
             fr = [n for on, n in ((ENABLE_IFVG_1H, "ساعة"), (ENABLE_IFVG_4H, "4 ساعات")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"

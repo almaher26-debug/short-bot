@@ -21,13 +21,13 @@
 (4ج) الشورت صفر اللحظي - من Interactive Brokers (نفس ChartExchange)
     - الأسهم: من 1$ إلى 10$ وقيمتها السوقية من 1 إلى 100 مليون
     - تنبيه "🚫 الشورت صفر" لما المتاح للشورت يوصل صفر، مع حجم الشورت آخر 15 يوم (FINRA)
-    - أقصى 64 تنبيه باليوم (BZ_MAX_PER_DAY) موزعة على 24 ساعة (BZ_SPREAD_24H)، وتنبيه واحد لكل سهم كل 7 أيام
+    - أقصى 48 تنبيه باليوم (BZ_MAX_PER_DAY) موزعة على 24 ساعة (BZ_SPREAD_24H)، وتنبيه واحد لكل سهم كل 7 أيام
     - قائمة أسبوعية كل أحد: 10 أسهم صار الشورت عندها صفر خلال آخر 7 أيام
     - ENABLE_BORROW_ZERO = False يطفيه
 
 (4ج-2) نزول الشورت المتاح - نفس مصدر وأسهم (4ج)
     - تنبيه "📉 نزول الشورت المتاح" لما المتاح ينزل أكثر من 90% عن أعلى رقم خلال آخر 30 يوم (وما وصل صفر)
-    - يشترك مع (4ج) بنفس الحد: 64 تنبيه باليوم للقسمين مع بعض، موزعة على 24 ساعة، وتنبيه واحد لكل سهم كل 7 أيام
+    - يشترك مع (4ج) بنفس الحد: 48 تنبيه باليوم للقسمين مع بعض، موزعة على 24 ساعة، وتنبيه واحد لكل سهم كل 7 أيام
     - BZ_DROP_ALERTS = False يطفيه
 
 (4ب) التجزئة العكسية - أسهم ناسداك
@@ -97,7 +97,7 @@
     - WKOPT_PUT_ONLY = True = البوت بس (الكول يرجع على (1ك-2) بدون عقد)
     - تنبيه واحد بس لكل سهم بالأسبوع
     - العقد: أكثر من 10 أيام، حجم تداول فوق 500، عقود مفتوحة فوق 1000، دلتا فوق 0.1200 + قاما العقد
-    - لو ما لقى عقد بالشروط ينبه بدونه | المؤشرات (سباكس) تكمل على (1ك-2) فريم 4 ساعات | ENABLE_WKOPT = False يطفيه
+    - لو ما لقى عقد بالشروط ينبه بدونه | المؤشرات (سباكس) تنبيه بدون عقد | ENABLE_WKOPT = False يطفيه
 
 التشغيل:
   pip install yfinance pandas requests lxml
@@ -185,7 +185,7 @@ GAP_SCAN_AFTER_CLOSE_MIN = (1, 5, 12)   # يفحص بعد الإغلاق بكذ�
 GAP_SENT_FILE = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "gap_sent.txt")   # في /data عشان ما يعيد نفس التنبيه بعد إعادة التشغيل أو الرفع
 
 # ---- (2) ماسح السيولة - البني ستوك ----
-ENABLE_FLOW = True  # ماسح السيولة للبني ستوك
+ENABLE_FLOW = False  # ماسح السيولة للبني ستوك (مطفي 15 نوفمبر 2026)
 FLOW_MIN_PRICE = 1               # أقل سعر
 FLOW_MAX_PRICE = 5               # أعلى سعر
 FLOW_MIN_AVG_VOLUME = 100_000    # يشيل الأسهم الميتة
@@ -198,10 +198,10 @@ FLOW_EVERY_MIN = 5               # كل كم دقيقة يفحص
 FLOW_SENT_FILE = "flow_sent.txt" # عشان ما يعيد نفس السهم بنفس اليوم
 
 # ---- (4ج) الشورت صفر اللحظي: الأسهم المتاحة للشورت وصلت صفر (Interactive Brokers كل 15 دقيقة) ----
-ENABLE_BORROW_ZERO = False  # True = شغال | False = مطفي
+ENABLE_BORROW_ZERO = True  # True = شغال | False = مطفي (يشغّل نزول الشورت المتاح)
 BZ_ZERO_ALERTS = False           # تنبيه "🚫 الشورت صفر" اللحظي: False = مطفي | True = يرجع
-BZ_SPREAD_24H = True             # True = التنبيهات تنقسم على 24 ساعة (وحدة كل 24÷BZ_MAX_PER_DAY = 22.5 دقيقة) | False = ترسل فوراً
-BZ_MAX_PER_DAY = 64              # أقصى عدد تنبيهات الشورت صفر باليوم | 0 = بدون حد
+BZ_SPREAD_24H = True             # True = التنبيهات تنقسم على 24 ساعة (وحدة كل 24÷BZ_MAX_PER_DAY = 30 دقيقة) | False = ترسل فوراً
+BZ_MAX_PER_DAY = 48              # أقصى عدد تنبيهات الشورت صفر باليوم | 0 = بدون حد
 BZ_COOLDOWN_DAYS = 7             # تنبيه واحد لكل سهم كل كذا يوم | 0 = بدون حد
 BZ_MIN_PRICE = 1                 # أقل سعر: الأسهم فوق دولار بس (0 = بدون حد)
 BZ_MAX_PRICE = 10                # أعلى سعر (0 = بدون حد)
@@ -212,7 +212,7 @@ BZ_FTP_TIMEOUT = 10              # ثواني لكل محاولة (كانت 25 �
 BZ_EVERY_MIN = 2                 # كل كم دقيقة يفحص (كانت 15) — يمسك تحديث IBKR خلال دقيقتين
 BZ_WARN_AFTER_MIN = 60           # ينبهك لو ملف IBKR ما تحمّل من كذا دقيقة
 BZ_UNIVERSE_EVERY_MIN = 60       # كل كم دقيقة يحدث قائمة البني ستوك (السعر والقيمة السوقية)
-# ---- (4ج-2) نزول الشورت المتاح (نفس الطابور والحد اليومي 64 مع الشورت صفر) ----
+# ---- (4ج-2) نزول الشورت المتاح (نفس الطابور والحد اليومي 48 مع الشورت صفر) ----
 BZ_DROP_ALERTS = True            # True = شغال | False = مطفي
 BZ_DROP_PCT = 90                 # ينبه لما المتاح ينزل أكثر من كذا % عن أعلى رقم بالفترة
 BZ_DROP_DAYS = 30                # الفترة: آخر شهر
@@ -222,7 +222,7 @@ BZ_STATE_FILE = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "
 
 # ---- قائمة الشورت صفر الأسبوعية (كل يوم أحد) ----
 #   10 أسهم صار المتاح للشورت عندها صفر خلال آخر 7 أيام (الأحدث أول)
-BZ_WEEKLY_ZERO = True            # True = شغالة | False = مطفية
+BZ_WEEKLY_ZERO = False           # True = شغالة | False = مطفية
 BZ_WEEKLY_N = 10                 # كم سهم بالقائمة
 BZ_WEEKLY_DAYS = 7               # الفترة: آخر أسبوع
 BZ_WEEKLY_DAY = 6                # يوم الإرسال: 6 = الأحد (0 = الاثنين)
@@ -250,8 +250,8 @@ PWL_MAX_ALERT_DELAY_MIN = 30     # ما ينبه على شمعة قفلت من �
 #   الشموع بدون الجلسة الليلية: 4-8 بري، 8-12، 12-4 ماركت، 4-8 أفتر (نيويورك)
 #   قمة وقاع الأسبوع السابق محسوبة من بري + ماركت + أفتر (4 الفجر - 8 بالليل) بدون الليلي
 #   تنبيه واحد لكل سهم بالأسبوع لكل جهة (دعم / مقاومة)
-ENABLE_PWL_4H = True  # الدعم: True = شغال | False = مطفي
-ENABLE_PWH_4H = True  # المقاومة: True = شغال | False = مطفي
+ENABLE_PWL_4H = False  # الدعم: True = شغال | False = مطفي
+ENABLE_PWH_4H = False  # المقاومة: True = شغال | False = مطفي
 PW4H_WICK_ONLY = True  # True = الذيل بس يكسر المستوى، الافتتاح والإغلاق كلهم بجهته | False = الإغلاق بس
 
 # ---- (1) الإنفيرجن IFVG - فريم ساعة و4 ساعات - قائمة المراقبة (WATCH_SYMBOLS) ----
@@ -1795,7 +1795,7 @@ def scan_pwl_4h(symbols, sent):
             for side, tag, fn, old_on in checks4h:
                 lvl, lvl_day = lv4[side]
                 # ---- (12) الأسهم من 100$ إلى 350$: تنبيه واحد بالأسبوع + العقد (البوت بس لو WKOPT_PUT_ONLY) ----
-                if wkopt_in_range(spot) and t not in INDEX_SYMBOLS and (side == "high" or not WKOPT_PUT_ONLY):
+                if wkopt_in_range(spot) and (side == "high" or not WKOPT_PUT_ONLY):
                     r = fn(cwk, lvl, wk0, wick_only=PW4H_WICK_ONLY)
                     if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
                         continue
@@ -1804,7 +1804,8 @@ def scan_pwl_4h(symbols, sent):
                     put = side == "high"
                     opt = None
                     try:
-                        opt = wkopt_pick_option(t, r["close"], put)
+                        if t not in INDEX_SYMBOLS:      # المؤشرات (سباكس) ما لها عقود: تنبيه بدون عقد
+                            opt = wkopt_pick_option(t, r["close"], put)
                     except Exception as e:
                         log(f"سحب أسبوعي + عقد: {t}: العقد: {e}")
                     if opt is None and WKOPT_REQUIRE_CONTRACT:
@@ -2214,10 +2215,13 @@ def wkopt_message(t, side, lvl, lvl_day, r, opt):
         if g_line:
             lines.append(g_line)
         lines.append(f"حجم التداول: {int(vol):,} | العقود المفتوحة: {int(oi):,}")
+    elif t in INDEX_SYMBOLS:
+        lines.append("📄 العقد: مؤشر — ما فيه عقد (الاتجاه بس)")
     else:
         lines.append(f"📄 العقد: ما لقيت {kind} بالشروط")
-    lines.append(f"(شروط العقد: أكثر من {WKOPT_OPT_MIN_DTE} أيام، حجم فوق {WKOPT_OPT_MIN_VOLUME}، "
-                 f"عقود مفتوحة فوق {WKOPT_OPT_MIN_OI:,}، دلتا فوق {WKOPT_OPT_MIN_DELTA:.4f})")
+    if t not in INDEX_SYMBOLS:
+        lines.append(f"(شروط العقد: أكثر من {WKOPT_OPT_MIN_DTE} أيام، حجم فوق {WKOPT_OPT_MIN_VOLUME}، "
+                     f"عقود مفتوحة فوق {WKOPT_OPT_MIN_OI:,}، دلتا فوق {WKOPT_OPT_MIN_DELTA:.4f})")
     lines += ["", WKOPT_CHECK_LINE, "", "⚠️ محتوى تعليمي — تداول وهمي، ليست توصية للشراء."]
     return "\n".join(lines)
 
@@ -3960,7 +3964,7 @@ def main():
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
                       "الأقسام: " + ("الشورت صفر اللحظي + " if ENABLE_BORROW_ZERO else "") + "الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك"
                       + (" + خوارزميات الأسهم الكبيرة" if ALGO_BIG else "")
-                      + (" + الآيس بيرغ" if ALGO_BIG and ALGO_ICE else "") + " + ماسح السيولة"
+                      + (" + الآيس بيرغ" if ALGO_BIG and ALGO_ICE else "") + (" + ماسح السيولة" if ENABLE_FLOW else "")
                       + (" + سحب الجمعة/الاثنين (كول)" if ENABLE_FRIMON else "") + " + التجزئة العكسية"
                       f"{pw4h_txt}\n"
                       f"الوقت: {pd.Timestamp.now(tz=LOCAL_TZ):%Y-%m-%d %H:%M} (توقيتك)")

@@ -18,17 +18,11 @@
     - حجم الجاب: 50 سنت وفوق (ساعة) و1$ وفوق (4 ساعات)، والتنبيه بعد إغلاق الشمعة بدقيقة
     - ENABLE_IFVG = False يطفيه (أو ENABLE_IFVG_1H / ENABLE_IFVG_4H لكل فريم)
 
-(4ج) الشورت صفر اللحظي - من Interactive Brokers (نفس ChartExchange)
+(4ج) نزول الشورت المتاح - من Interactive Brokers (نفس ChartExchange)
     - الأسهم: من 1$ إلى 10$ وقيمتها السوقية من 1 إلى 100 مليون
-    - تنبيه "🚫 الشورت صفر" لما المتاح للشورت يوصل صفر، مع حجم الشورت آخر 15 يوم (FINRA)
-    - أقصى 48 تنبيه باليوم (BZ_MAX_PER_DAY) موزعة على 24 ساعة (BZ_SPREAD_24H)، وتنبيه واحد لكل سهم كل 7 أيام
-    - قائمة أسبوعية كل أحد: 10 أسهم صار الشورت عندها صفر خلال آخر 7 أيام
-    - ENABLE_BORROW_ZERO = False يطفيه
-
-(4ج-2) نزول الشورت المتاح - نفس مصدر وأسهم (4ج)
-    - تنبيه "📉 نزول الشورت المتاح" لما المتاح ينزل أكثر من 90% عن أعلى رقم خلال آخر 30 يوم (وما وصل صفر)
-    - يشترك مع (4ج) بنفس الحد: 48 تنبيه باليوم للقسمين مع بعض، موزعة على 24 ساعة، وتنبيه واحد لكل سهم كل 7 أيام
-    - BZ_DROP_ALERTS = False يطفيه
+    - تنبيه "📉 نزول الشورت المتاح" لما المتاح ينزل أكثر من 90% عن أعلى رقم خلال آخر 30 يوم، مع حجم الشورت آخر 15 يوم (FINRA)
+    - أقصى 48 تنبيه باليوم موزعة على 24 ساعة، وتنبيه واحد لكل سهم كل 7 أيام
+    - ENABLE_BORROW_DROP = False يطفيه
 
 (4ب) التجزئة العكسية - أسهم ناسداك
     - كل يوم سوق (بعد 10 الصبح نيويورك): الأسهم اللي سوت تجزئة عكسية جديدة بس
@@ -198,11 +192,10 @@ FLOW_MAX_PULLBACK = 0.03         # ما رجع أكثر من 3% عن قمة ال
 FLOW_EVERY_MIN = 5               # كل كم دقيقة يفحص
 FLOW_SENT_FILE = "flow_sent.txt" # عشان ما يعيد نفس السهم بنفس اليوم
 
-# ---- (4ج) الشورت صفر اللحظي: الأسهم المتاحة للشورت وصلت صفر (Interactive Brokers كل 15 دقيقة) ----
-ENABLE_BORROW_ZERO = True  # True = شغال | False = مطفي (يشغّل نزول الشورت المتاح)
-BZ_ZERO_ALERTS = False           # تنبيه "🚫 الشورت صفر" اللحظي: False = مطفي | True = يرجع
+# ---- (4ج) نزول الشورت المتاح أكثر من 90% (Interactive Brokers) ----
+ENABLE_BORROW_DROP = True  # True = شغال | False = مطفي
 BZ_SPREAD_24H = True             # True = التنبيهات تنقسم على 24 ساعة (وحدة كل 24÷BZ_MAX_PER_DAY = 30 دقيقة) | False = ترسل فوراً
-BZ_MAX_PER_DAY = 48              # أقصى عدد تنبيهات الشورت صفر باليوم | 0 = بدون حد
+BZ_MAX_PER_DAY = 48              # أقصى عدد تنبيهات باليوم | 0 = بدون حد
 BZ_COOLDOWN_DAYS = 7             # تنبيه واحد لكل سهم كل كذا يوم | 0 = بدون حد
 BZ_MIN_PRICE = 1                 # أقل سعر: الأسهم فوق دولار بس (0 = بدون حد)
 BZ_MAX_PRICE = 10                # أعلى سعر (0 = بدون حد)
@@ -213,22 +206,14 @@ BZ_FTP_TIMEOUT = 10              # ثواني لكل محاولة (كانت 25 �
 BZ_EVERY_MIN = 2                 # كل كم دقيقة يفحص (كانت 15) — يمسك تحديث IBKR خلال دقيقتين
 BZ_WARN_AFTER_MIN = 60           # ينبهك لو ملف IBKR ما تحمّل من كذا دقيقة
 BZ_UNIVERSE_EVERY_MIN = 60       # كل كم دقيقة يحدث قائمة البني ستوك (السعر والقيمة السوقية)
-# ---- (4ج-2) نزول الشورت المتاح (نفس الطابور والحد اليومي 48 مع الشورت صفر) ----
-BZ_DROP_ALERTS = True            # True = شغال | False = مطفي
 BZ_DROP_PCT = 90                 # ينبه لما المتاح ينزل أكثر من كذا % عن أعلى رقم بالفترة
 BZ_DROP_DAYS = 30                # الفترة: آخر شهر
 BZ_DROP_MIN_HIGH = 10_000        # أعلى رقم بالفترة لازم يكون كذا سهم وفوق (يشيل الأسهم اللي متاحها أصلاً قليل)
 BZ_SHORT_DAYS = 15               # كم يوم من حجم الشورت يكتب في التنبيه
 BZ_STATE_FILE = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "borrow_state.json")   # يُحفظ في /data عشان ما يضيع مع كل رفع
 
-# ---- قائمة الشورت صفر الأسبوعية (كل يوم أحد) ----
-#   10 أسهم صار المتاح للشورت عندها صفر خلال آخر 7 أيام (الأحدث أول)
-BZ_WEEKLY_ZERO = False           # True = شغالة | False = مطفية
-BZ_WEEKLY_N = 10                 # كم سهم بالقائمة
-BZ_WEEKLY_DAYS = 7               # الفترة: آخر أسبوع
-BZ_WEEKLY_DAY = 6                # يوم الإرسال: 6 = الأحد (0 = الاثنين)
-BZ_WEEKLY_HOUR = 0               # يرسلها من هالساعة وطالع (توقيتك)
-BZ_WEEKLY_MAX_RISE = 30          # يستبعد السهم لو ارتفع أكثر من كذا % خلال الأسبوع (0 = بدون فلتر)
+
+
 
 # ---- (4د) سكنر الزخم: ارتفاع قوي + فوليوم نسبي + قريب من قمة اليوم (Alpaca، كل دقيقة) ----
 ENABLE_MOMENTUM = True  # True = شغال | False = مطفي
@@ -1042,7 +1027,7 @@ def _append_line(path, line):
         pass
 
 
-# ================== (4ج) الشورت صفر اللحظي (الأسهم المتاحة للشورت) ==================
+# ================== (4ج) نزول الشورت المتاح أكثر من 90% ==================
 #   المصدر: ملف Interactive Brokers العام (نفس ChartExchange) يتحدث كل 15 دقيقة
 #   + حجم الشورت اليومي آخر 15 يوم من FINRA
 def _bz_num(x):
@@ -1079,7 +1064,7 @@ def bz_universe():
                     out[sym] = {"price": price, "cap": cap}
                     BZ_EXCHANGE[sym] = ex
         except Exception as e:
-            log(f"الشورت صفر: سكرينر {ex} خطأ: {e}")
+            log(f"نزول الشورت: سكرينر {ex} خطأ: {e}")
     return out
 
 
@@ -1118,7 +1103,7 @@ def bz_download_ibkr():
             if text.strip():
                 _bz_last_ok = (host, passive)
                 if errors:
-                    log(f"الشورت صفر: نجح التحميل من {host} ({'سلبي' if passive else 'نشط'}) "
+                    log(f"نزول الشورت: نجح التحميل من {host} ({'سلبي' if passive else 'نشط'}) "
                         f"بعد: {' | '.join(errors)}")
                 return text
             errors.append(f"{host}: الملف فاضي")
@@ -1223,7 +1208,7 @@ def bz_dispatch(state):
     send_telegram(x["t"], sym=x["s"])
     state["_last_send"] = now.isoformat()
     _bz_save_state(state)
-    log(f"الشورت صفر: انرسل تنبيه من الطابور ({x['s']}) — باقي {len(q)}")
+    log(f"نزول الشورت: انرسل تنبيه من الطابور ({x['s']}) — باقي {len(q)}")
 
 
 def _bz_load_state():
@@ -1239,7 +1224,7 @@ def _bz_save_state(state):
         with open(BZ_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f)
     except Exception as e:
-        log(f"الشورت صفر: ما قدرت أحفظ الحالة: {e}")
+        log(f"نزول الشورت: ما قدرت أحفظ الحالة: {e}")
 
 
 _bz_last_hash = None   # بصمة آخر ملف IBKR — لو ما تغير ما يعيد الفحص
@@ -1255,11 +1240,11 @@ def bz_check(state, first_run, universe):
     _bz_last_hash = h
     data = bz_parse_ibkr(text)
     if not data:
-        log("الشورت صفر: ملف IBKR فاضي أو صيغته تغيرت")
+        log("نزول الشورت: ملف IBKR فاضي أو صيغته تغيرت")
         return True
     now = datetime.now(ZoneInfo(LOCAL_TZ))
     fee_txt = lambda f: "غير معروف" if f != f else f"{f:.2f}%"
-    zero_now = alerts = 0
+    alerts = 0
     cool = state.get("_cool")
     if not isinstance(cool, dict):
         cool = state["_cool"] = {}
@@ -1283,11 +1268,6 @@ def bz_check(state, first_run, universe):
 
     for k in [k for k, v in cool.items() if now - datetime.fromisoformat(v) >= timedelta(days=max(BZ_COOLDOWN_DAYS, 1))]:
         del cool[k]
-    zlog = state.get("_zero_log")
-    if not isinstance(zlog, dict):
-        zlog = state["_zero_log"] = {}
-    for k in [k for k, v in zlog.items() if now - datetime.fromisoformat(v) >= timedelta(days=30)]:
-        del zlog[k]
     hist = state.get("_hist")              # {الرمز: {اليوم: أعلى متاح باليوم}} لآخر BZ_DROP_DAYS يوم
     if not isinstance(hist, dict):
         hist = state["_hist"] = {}
@@ -1307,28 +1287,9 @@ def bz_check(state, first_run, universe):
                 continue
             info = {"available": 0, "fee": float("nan")}
         avail = info["available"]
-        zero_now += avail == 0
-        if prev is not None and not first_run and prev > 0 and avail == 0:
-            zlog[sym] = now.isoformat()          # سجل الشورت صفر للقائمة الأسبوعية
-        elif avail > 0:
-            zlog.pop(sym, None)
-        if prev is not None and not first_run:
-            if BZ_ZERO_ALERTS and prev > 0 and avail == 0 and cooled("zero", sym):
-                _bz_out(state, "main",
-                    f"🚫 الشورت صفر - ${sym}\n"
-                    f"السعر: {u['price']:.2f}$\n"
-                    f"القيمة السوقية: {u['cap'] / 1e6:.1f} مليون$\n"
-                    f"الأسهم المتاحة للشورت: 0 (كانت {prev:,})\n"
-                    f"رسوم الاستلاف: {fee_txt(info['fee'])}\n"
-                    f"الوقت: {now:%Y-%m-%d %H:%M} (توقيتك)\n"
-                    f"المصدر: Interactive Brokers (نفس ChartExchange)\n"
-                    f"{bz_cx_link(sym)}\n\n"
-                    f"{bz_short_history_txt(sym)}", sym=sym)
-                alerts += 1
-                time.sleep(0.5)
-        # ---- (4ج-2) نزول الشورت المتاح عن أعلى رقم بالشهر ----
+        # ---- نزول الشورت المتاح عن أعلى رقم بالشهر ----
         sh = hist.get(sym) or {}
-        if sh and not first_run and BZ_DROP_ALERTS and avail > 0:
+        if sh and not first_run and avail > 0:
             top_day, top = max(sh.items(), key=lambda x: x[1])
             drop = (1 - avail / top) * 100 if top else 0
             was_above = prev is None or prev >= top * (1 - BZ_DROP_PCT / 100)   # يعني توه نزل تحت الحد
@@ -1351,125 +1312,16 @@ def bz_check(state, first_run, universe):
             hist.setdefault(sym, {})[today_s] = avail
         state[sym] = avail
     _bz_save_state(state)
-    log(f"[{datetime.now():%H:%M}] الشورت صفر: {len(universe)} سهم بني ستوك — "
-        f"صفر حالياً {zero_now} — تنبيهات {alerts}")
+    log(f"[{datetime.now():%H:%M}] نزول الشورت: {len(universe)} سهم — تنبيهات {alerts}")
     return True
-
-
-def bz_weekly_zero_list(state, universe, now=None):
-    """أسهم صار الشورت عندها صفر خلال آخر BZ_WEEKLY_DAYS يوم: [(الرمز، وقت الصفر)] — الأحدث أول."""
-    now = now or datetime.now(ZoneInfo(LOCAL_TZ))
-    since = now - timedelta(days=BZ_WEEKLY_DAYS)
-    found = {}
-    for sym, ts in (state.get("_zero_log") or {}).items():
-        t = datetime.fromisoformat(ts)
-        if t >= since and state.get(sym) == 0:
-            found[sym] = t
-    items = [(s, t) for s, t in sorted(found.items(), key=lambda x: x[1], reverse=True) if s in universe]
-    if not BZ_WEEKLY_MAX_RISE or not items:
-        return [(s, t, None) for s, t in items][:BZ_WEEKLY_N]
-    rises = bz_week_rise([s for s, _ in items], since)
-    out = []
-    for s, t in items:
-        r = rises.get(s)
-        if r is not None and r > BZ_WEEKLY_MAX_RISE:
-            continue                      # عطى ارتفاع أكثر من 30% — يستبعد
-        out.append((s, t, r))
-        if len(out) >= BZ_WEEKLY_N:
-            break
-    return out
-
-
-def bz_week_rise(syms, since):
-    """{الرمز: أعلى ارتفاع % خلال الفترة} = (أعلى سعر من بداية الفترة ÷ إغلاق آخر يوم قبلها) - 1."""
-    out = {}
-    try:
-        for sym, df in download_batches(syms, 50, period="1mo", interval="1d"):
-            idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
-            start = pd.Timestamp(since.date())
-            before, during = df[idx < start], df[idx >= start]
-            if before.empty or during.empty:
-                continue
-            base = float(before["Close"].iloc[-1])
-            if base > 0:
-                out[sym] = (float(during["High"].max()) / base - 1) * 100
-    except Exception as e:
-        log(f"الشورت صفر: ما قدرت أحسب الارتفاع الأسبوعي: {e}")
-    return out
-
-
-def bz_weekly_zero_text(state, universe, now=None):
-    now = now or datetime.now(ZoneInfo(LOCAL_TZ))
-    rows = bz_weekly_zero_list(state, universe, now)
-    head = (f"📋 قائمة الشورت صفر الأسبوعية - {now:%Y-%m-%d}\n"
-            f"أسهم صار الشورت عندها صفر خلال آخر {BZ_WEEKLY_DAYS} أيام"
-            + (f" وما ارتفعت أكثر من {BZ_WEEKLY_MAX_RISE}%" if BZ_WEEKLY_MAX_RISE else "") + "\n"
-            "الشورت صفر = ما فيه ولا سهم متاح للاستلاف عشان البيع على المكشوف (المصدر: Interactive Brokers)\n")
-    if not rows:
-        return head + "\nما فيه ولا سهم ينطبق عليه الشرط هالأسبوع."
-    lines = [f"{i}) ${s} - صفر من {t:%m-%d} | السعر {universe[s]['price']:.2f}$"
-             + (f" | أعلى ارتفاع {r:.0f}%" if r is not None else "")
-             + f" | القيمة {universe[s]['cap'] / 1e6:.1f} مليون$"
-             for i, (s, t, r) in enumerate(rows, 1)]
-    return head + f"\n({len(rows)} سهم)\n" + "\n".join(lines)
-
-
-def bz_weekly_zero(state, universe):
-    """كل أحد: يرسل القائمة مرة وحدة بالأسبوع."""
-    if not BZ_WEEKLY_ZERO or not universe:
-        return
-    now = datetime.now(ZoneInfo(LOCAL_TZ))
-    if now.weekday() != BZ_WEEKLY_DAY or now.hour < BZ_WEEKLY_HOUR:
-        return
-    wk = now.strftime("%G-W%V")
-    if state.get("_weekly_zero") == wk:
-        return
-    send_telegram(bz_weekly_zero_text(state, universe, now))
-    state["_weekly_zero"] = wk
-    _bz_save_state(state)
-    log("الشورت صفر: انرسلت القائمة الأسبوعية")
-
-
-BZ_TEST_ID = "1"   # غيّر الرقم لو تبي رسالة تجريبية ثانية بعد الرفع الجاي
-
-
-def bz_send_test_once():
-    """يرسل تنبيه تجريبي مرة وحدة بس (يتذكرها في مجلد /data عشان ما تتكرر مع كل تشغيل)."""
-    if not BZ_ZERO_ALERTS:
-        return
-    folder = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", ".")
-    marker = os.path.join(folder, "bz_test_sent.txt")
-    try:
-        with open(marker, encoding="utf-8") as f:
-            if f.read().strip() == BZ_TEST_ID:
-                return
-    except Exception:
-        pass
-    now = datetime.now(ZoneInfo(LOCAL_TZ))
-    send_telegram(
-        "🧪 رسالة تجريبية - هذا مو تنبيه حقيقي\n\n"
-        "🚫 الشورت صفر - $NUWE\n"
-        "السعر: 6.46$\n"
-        "الأسهم المتاحة للشورت: 0 (كانت 76)\n"
-        "رسوم الاستلاف: 173.41%\n"
-        f"الوقت: {now:%Y-%m-%d %H:%M} (توقيتك)\n"
-        "المصدر: Interactive Brokers (نفس ChartExchange)\n"
-        f"{bz_cx_link('NUWE')}\n\n"
-        "لو وصلتك هالرسالة، التنبيهات الحقيقية بتوصل لنفس المكان.")
-    try:
-        with open(marker, "w", encoding="utf-8") as f:
-            f.write(BZ_TEST_ID)
-    except Exception as e:
-        log(f"الشورت صفر: ما قدرت أحفظ علامة الرسالة التجريبية: {e}")
 
 
 def bz_run_forever():
     price_txt = (f"{BZ_MIN_PRICE:g}-{BZ_MAX_PRICE:g}$" if BZ_MAX_PRICE
                  else f"السعر {BZ_MIN_PRICE:g}$ وفوق" if BZ_MIN_PRICE else "بدون حد سعر")
-    log(f"الشورت صفر: بدأ — {price_txt}، " + (f"قيمة سوقية {BZ_MIN_MARKET_CAP / 1e6:g}-{BZ_MAX_MARKET_CAP / 1e6:g} مليون " if BZ_MAX_MARKET_CAP else "بدون حد للقيمة السوقية ")
+    log(f"نزول الشورت: بدأ — {price_txt}، " + (f"قيمة سوقية {BZ_MIN_MARKET_CAP / 1e6:g}-{BZ_MAX_MARKET_CAP / 1e6:g} مليون " if BZ_MAX_MARKET_CAP else "بدون حد للقيمة السوقية ")
         + 
         f"— كل {BZ_EVERY_MIN} دقيقة")
-    bz_send_test_once()
     state = _bz_load_state()
     first_run = not state      # أول مرة يسجل الوضع بس عشان ما يجيك سيل تنبيهات
     universe, uni_last = {}, 0.0
@@ -1480,20 +1332,19 @@ def bz_run_forever():
                 fresh = bz_universe()
                 if fresh:
                     universe, uni_last = fresh, time.time()
-                    log(f"الشورت صفر: قائمة البني ستوك {len(universe)} سهم")
+                    log(f"نزول الشورت: قائمة البني ستوك {len(universe)} سهم")
             if universe:
                 bz_check(state, first_run, universe)
                 first_run = False
                 bz_dispatch(state)
-                bz_weekly_zero(state, universe)
                 if warned:
-                    send_telegram("✅ تنبيه الشورت صفر رجع يشتغل (ملف IBKR يتحمل طبيعي)")
+                    send_telegram("✅ تنبيه نزول الشورت رجع يشتغل (ملف IBKR يتحمل طبيعي)")
                 last_ok, warned = time.time(), False
         except Exception as e:
-            log(f"الشورت صفر: خطأ {e}")
+            log(f"نزول الشورت: خطأ {e}")
             if time.time() - last_ok >= BZ_WARN_AFTER_MIN * 60 and not warned:   # ساعة بدون بيانات = يعلمك
                 warned = True
-                send_telegram("⚠️ تنبيه الشورت صفر واقف: ما قدر يحمل ملف IBKR من ساعة.\n"
+                send_telegram("⚠️ تنبيه نزول الشورت واقف: ما قدر يحمل ملف IBKR من ساعة.\n"
                               f"آخر خطأ: {str(e)[:300]}")
         time.sleep(BZ_EVERY_MIN * 60)
 
@@ -3979,7 +3830,7 @@ def main():
             fr = [n for on, n in ((WATCH_IFVG_1H, "ساعة"), (WATCH_IFVG_4H, "4 ساعات")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG قائمة المراقبة فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
-                      "الأقسام: " + ("الشورت صفر اللحظي + " if ENABLE_BORROW_ZERO else "") + "الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك"
+                      "الأقسام: " + ("نزول الشورت المتاح 90% + " if ENABLE_BORROW_DROP else "") + "الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك"
                       + (" + خوارزميات الأسهم الكبيرة" if ALGO_BIG else "")
                       + (" + الآيس بيرغ" if ALGO_BIG and ALGO_ICE else "") + (" + ماسح السيولة" if ENABLE_FLOW else "")
                       + (" + سحب الجمعة/الاثنين (كول)" if ENABLE_FRIMON else "") + " + التجزئة العكسية"
@@ -3990,10 +3841,10 @@ def main():
         start_news_thread()
         if ENABLE_FRIMON:        # (11) سحب قمة الجمعة/الاثنين + دعم الأسبوع السابق → كول
             threading.Thread(target=frimon_run_forever, daemon=True, name="frimon").start()
+        if ENABLE_BORROW_DROP:   # نزول الشورت المتاح أكثر من 90%
+            threading.Thread(target=bz_run_forever, daemon=True, name="borrow_drop").start()
         if ENABLE_MOMENTUM:      # سكنر الزخم
             threading.Thread(target=mom_run_forever, daemon=True, name="momentum").start()
-        if ENABLE_BORROW_ZERO:   # الشورت صفر اللحظي
-            threading.Thread(target=bz_run_forever, daemon=True, name="borrow_zero").start()
 
     pwl_last = 0.0
     ifvg_last = None

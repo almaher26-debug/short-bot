@@ -92,10 +92,11 @@
     - التنبيه: كول مع الأهداف والوقف وعقد كول مدته أسبوعين
     - الأسهم: قائمة المراقبة اللي سعرها 100$-400$ | ENABLE_FRIMON = False يطفيه
 
-(12) سحب السيولة الأسبوعي - فريم 6 ساعات (4-10، 10-4، 4-8 نيويورك) + العقد - كل قائمة المراقبة (بدون شرط سعر)
-    - نفس شمعة السحب على فريم 6 ساعات: سحب دعم الأسبوع السابق → كول | سحب مقاومة الأسبوع السابق → بوت
+(12) سحب السيولة الأسبوعي - فريم 4 ساعات (4-8، 8-12، 12-4، 4-8 نيويورك) + العقد - كل قائمة المراقبة (بدون شرط سعر)
+    - الدعم: ذيل الشمعة بس نزل تحت قاع الأسبوع السابق، والافتتاح والإغلاق فوقه → كول
+    - المقاومة: ذيل الشمعة بس طلع فوق قمة الأسبوع السابق، والافتتاح والإغلاق تحتها → بوت
     - WKOPT_PUT_ONLY = True = البوت بس (الكول يرجع على (1ك-2) بدون عقد)
-    - تنبيه واحد بس لكل سهم بالأسبوع
+    - لو رجع اختبر المستوى وسوى سحب ذيل ثاني → تنبيه ثاني "🔁 إعادة اختبار" (WKOPT_REALERT = False = تنبيه واحد بالأسبوع)
     - العقد: أكثر من 10 أيام، حجم تداول فوق 500، عقود مفتوحة فوق 1000، دلتا فوق 0.1200 + قاما العقد
     - لو ما لقى عقد بالشروط ينبه بدونه | المؤشرات (سباكس) تنبيه بدون عقد | ENABLE_WKOPT = False يطفيه
 
@@ -291,7 +292,7 @@ GAP_4H_24H = True               # فريم 4 ساعات: True = 24 ساعة (ي�
 ENABLE_WKOPT = True              # True = شغال | False = مطفي (كل الأسهم ترجع على (1ك-2) بدون عقد)
 WKOPT_PUT_ONLY = False           # True = البوت بس (سحب المقاومة) | False = كول وبوت
                                  #   الكول (سحب الدعم) يرجع على (1ك-2) بدون عقد
-WKOPT_FRAME_MIN = 360            # فريم القسم: 360 = 6 ساعات (4-10، 10-4، 4-8 نيويورك بدون الليلي) | 240 = 4 ساعات
+WKOPT_FRAME_MIN = 240            # فريم القسم: 240 = 4 ساعات (4-8، 8-12، 12-4، 4-8 نيويورك بدون الليلي) | 360 = 6 ساعات
 WKOPT_FRAME_TXT = f"فريم {WKOPT_FRAME_MIN // 60} ساعات"
 WKOPT_MIN_PRICE = 0              # سعر السهم من (0 = بدون حد) — الحين كل قائمة المراقبة
 WKOPT_MAX_PRICE = 0              # إلى (0 = بدون حد) — مثال: 100 و 350 يرجع النطاق القديم
@@ -300,6 +301,8 @@ WKOPT_OPT_MAX_DTE = 45           # أبعد انتهاء يدوّر فيه
 WKOPT_OPT_MIN_VOLUME = 500       # حجم التداول في العقد فوق 500
 WKOPT_OPT_MIN_OI = 1000          # العقود المفتوحة (الكمية غير إغلاق المركز) فوق 1000
 WKOPT_OPT_MIN_DELTA = 0.12       # الدلتا فوق 0.1200 (للبوت: القيمة المطلقة)
+WKOPT_REALERT = True             # True = لو رجع اختبر المستوى وسوى سحب ذيل ثاني = تنبيه ثاني (كل شمعة سحب جديدة)
+                                 # False = تنبيه واحد بس لكل سهم بالأسبوع
 WKOPT_REQUIRE_CONTRACT = False   # True = ما ينبه إلا لو لقى عقد بالشروط | False = ينبه حتى بدون عقد
 # ---- تمركز القاما للعقود مع تنبيه سحب السيولة (1ك-2) و (12) ----
 #   من سلسلة عقود ياهو (العقود المفتوحة + IV): قاما كل سترايك × العقود المفتوحة × 100 × السعر² × 1%
@@ -1738,14 +1741,14 @@ def _pwl_message(t, side, lvl, lvl_day, r, frame="فريم ساعة", trade=Fals
     if side == "low":
         head = f"💧 سحب سيولة دعم الأسبوع السابق — {frame}"
         lvl_line = f"الدعم (قاع الأسبوع السابق): {lvl:.2f}  (يوم {lvl_day})"
-        wick = f"أقل سعر بالشمعة: {r['low']:.2f}  (-{r['depth']:.2f}% تحت الدعم)"
-        close = f"الإغلاق: {r['close']:.2f} فوق الدعم | الشمعة {color}"
+        wick = f"ذيل الشمعة نزل لـ {r['low']:.2f}  (-{r['depth']:.2f}% تحت الدعم)"
+        close = f"الافتتاح {r['open']:.2f} والإغلاق {r['close']:.2f} فوق الدعم | الشمعة {color}"
         word, where = "الدعم", "تحت"
     else:
         head = f"🔻 سحب سيولة مقاومة الأسبوع السابق — {frame}"
         lvl_line = f"المقاومة (قمة الأسبوع السابق): {lvl:.2f}  (يوم {lvl_day})"
-        wick = f"أعلى سعر بالشمعة: {r['high']:.2f}  (+{r['depth']:.2f}% فوق المقاومة)"
-        close = f"الإغلاق: {r['close']:.2f} تحت المقاومة | الشمعة {color}"
+        wick = f"ذيل الشمعة طلع لـ {r['high']:.2f}  (+{r['depth']:.2f}% فوق المقاومة)"
+        close = f"الافتتاح {r['open']:.2f} والإغلاق {r['close']:.2f} تحت المقاومة | الشمعة {color}"
         word, where = "المقاومة", "فوق"
     note = (f"أول لمس {'للدعم' if side == 'low' else 'للمقاومة'} هالأسبوع" if r["first_touch"] else
             f"قبلها {r['closes_beyond']} شمعة قفلت {where} {word}" if r["closes_beyond"] else
@@ -1791,16 +1794,25 @@ def scan_pwl_4h(symbols, sent):
             cwk = (only_closed(to_frame(df, WKOPT_FRAME_MIN, overnight=False), df.index.max(), now)
                    if ENABLE_WKOPT else c4h)
             spot = float(df["Close"].iloc[-1])
-            wk_key = f"{t}-wkopt-{wk0:%Y%m%d}"     # (12) تنبيه واحد لكل سهم بالأسبوع
+            wk_key = f"{t}-wkopt-{wk0:%Y%m%d}"     # (12) تنبيه واحد لكل سهم بالأسبوع (لو WKOPT_REALERT = False)
             for side, tag, fn, old_on in checks4h:
+                # WKOPT_REALERT: كل شمعة سحب جديدة (إعادة اختبار بنفس السلوك) = تنبيه جديد
+                side_pref = f"{t}-wkopt-{side}-{wk0:%Y%m%d}-"
                 lvl, lvl_day = lv4[side]
                 # ---- (12) الأسهم من 100$ إلى 350$: تنبيه واحد بالأسبوع + العقد (البوت بس لو WKOPT_PUT_ONLY) ----
                 if wkopt_in_range(spot) and (side == "high" or not WKOPT_PUT_ONLY):
                     r = fn(cwk, lvl, wk0, wick_only=PW4H_WICK_ONLY)
                     if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
                         continue
-                    if wk_key in sent:
-                        break
+                    if WKOPT_REALERT:
+                        key = f"{side_pref}{pd.Timestamp(r['start']):%m%d%H%M}"
+                        if key in sent:
+                            continue
+                        nth = sum(1 for k in sent if k.startswith(side_pref)) + 1
+                    else:
+                        if wk_key in sent:
+                            break
+                        key, nth = wk_key, 1
                     put = side == "high"
                     opt = None
                     try:
@@ -1811,11 +1823,13 @@ def scan_pwl_4h(symbols, sent):
                     if opt is None and WKOPT_REQUIRE_CONTRACT:
                         log(f"سحب أسبوعي + عقد: {t}: فيه سحب {'مقاومة' if put else 'دعم'} بس ما فيه عقد بالشروط")
                         continue
-                    sent.add(wk_key)
-                    _append_line(GAP_SENT_FILE, wk_key)
+                    sent.add(key)
+                    _append_line(GAP_SENT_FILE, key)
                     hits += 1
-                    send_telegram(with_gamma(wkopt_message(t, side, lvl, lvl_day, r, opt), t, r["close"]),
+                    send_telegram(with_gamma(wkopt_message(t, side, lvl, lvl_day, r, opt, nth), t, r["close"]),
                                   kind="sweep", sym=t)
+                    if WKOPT_REALERT:
+                        continue
                     break
                 r = fn(c4h, lvl, wk0, wick_only=PW4H_WICK_ONLY)
                 if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
@@ -2191,11 +2205,14 @@ def wkopt_pick_option(t, spot, put):
     return None
 
 
-def wkopt_message(t, side, lvl, lvl_day, r, opt):
+def wkopt_message(t, side, lvl, lvl_day, r, opt, nth=1):
     put = side == "high"
     kind = "بوت" if put else "كول"
-    head = "🔴 بوت — سحب سيولة مقاومة أسبوعية" if put else "🟢 كول — سحب سيولة دعم أسبوعي"
-    lines = [head, _pwl_message(t, side, lvl, lvl_day, r, frame=WKOPT_FRAME_TXT, trade=True), ""]
+    head = ("🔴 سحب سيولة — مقاومة الأسبوع السابق (ذيل الشمعة) — بوت" if put
+            else "🟢 سحب سيولة — دعم الأسبوع السابق (ذيل الشمعة) — كول")
+    if nth > 1:
+        head = f"🔁 إعادة اختبار — السحب رقم {nth} هالأسبوع\n" + head
+    lines = [head,_pwl_message(t, side, lvl, lvl_day, r, frame=WKOPT_FRAME_TXT, trade=True), ""]
     if opt:
         c, vol, oi = opt
         exp, k, delta, bid, ask, sym, iv, gamma = c[:8]
@@ -2229,7 +2246,7 @@ def wkopt_message(t, side, lvl, lvl_day, r, opt):
 WKOPT_CHECK_LINE = "🔎 حلل السهم وتأكد من الاتجاه"
 
 
-WKOPT_TEST_ID = "3" # رسالة تجريبية مرة وحدة بعد الرفع — غيّر الرقم لو تبي وحدة ثانية
+WKOPT_TEST_ID = "4" # رسالة تجريبية مرة وحدة بعد الرفع — غيّر الرقم لو تبي وحدة ثانية
 
 
 def wkopt_send_test_once():

@@ -193,7 +193,7 @@ FLOW_EVERY_MIN = 5               # كل كم دقيقة يفحص
 FLOW_SENT_FILE = "flow_sent.txt" # عشان ما يعيد نفس السهم بنفس اليوم
 
 # ---- (4ج) نزول الشورت المتاح أكثر من 90% (Interactive Brokers) ----
-ENABLE_BORROW_DROP = True  # True = شغال | False = مطفي
+ENABLE_BORROW_DROP = False  # مطفي (16 نوفمبر 2026) | True = يرجع
 BZ_SPREAD_24H = True             # True = التنبيهات تنقسم على 24 ساعة (وحدة كل 24÷BZ_MAX_PER_DAY = 30 دقيقة) | False = ترسل فوراً
 BZ_MAX_PER_DAY = 48              # أقصى عدد تنبيهات باليوم | 0 = بدون حد
 BZ_COOLDOWN_DAYS = 7             # تنبيه واحد لكل سهم كل كذا يوم | 0 = بدون حد

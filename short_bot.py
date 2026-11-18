@@ -240,6 +240,17 @@ ENABLE_PWL_4H = False  # الدعم: True = شغال | False = مطفي
 ENABLE_PWH_4H = False  # المقاومة: True = شغال | False = مطفي
 PW4H_WICK_ONLY = True  # True = الذيل بس يكسر المستوى، الافتتاح والإغلاق كلهم بجهته | False = الإغلاق بس
 
+# ---- (13) سحب سيولة دعم ومقاومة اليوم السابق - فريم 4 ساعات - قائمة المراقبة ----
+#   الدعم: شمعة 4 ساعات (من اليوم) ذيلها نزل تحت قاع اليوم السابق وقفلت فوقه → كول
+#   المقاومة: شمعة 4 ساعات ذيلها طلع فوق قمة اليوم السابق وقفلت تحتها → بوت
+#   التنبيه بعد إغلاق الشمعة، ويكتب مستويات اليوم السابق والأسبوع السابق (الدعم والمقاومة)
+#   قمة وقاع اليوم السابق من بري + ماركت + أفتر (4 الفجر - 8 بالليل نيويورك) بدون الليلي
+#   تنبيه واحد لكل سهم بالأسبوع لكل جهة (أول سحب للدعم + أول سحب للمقاومة)
+ENABLE_PD4H = True     # True = شغال | False = مطفي
+PD4H_SYMBOLS = ["TSLA", "MSFT", "AAPL", "AMD", "META", "NVDA", "GOOGL", "AMZN", "MU"]   # أسهم القسم (لحالها)
+PD4H_CHECK_LINE = "🔎 حلل السهم بنفسك وحدد الاتجاه"
+PD4H_WICK_ONLY = False # False = الإغلاق بس يرجع فوق الدعم / تحت المقاومة | True = لازم الافتتاح بعد بجهة المستوى
+
 # ---- (1) الإنفيرجن IFVG - فريم ساعة و4 ساعات - قائمة المراقبة (WATCH_SYMBOLS) ----
 #   نفس نموذج gap_scanner: ثلاث شموع بين ذيل الأولى والثالثة جاب، الثانية تغطي الجاب كامل،
 #   والرابعة تقفل وراه (لون الشموع ما يهم)
@@ -448,14 +459,29 @@ CHATS = set()          # كل المحادثات اللي يرسل لها
 _last_update_id = 0
 
 
+def _resolve_chat(c):
+    """@اسم_القناة ← رقمها (-100...) عشان ما تنحسب القناة مرتين (مرة بالاسم ومرة بالرقم)."""
+    c = str(c).strip()
+    if not c.startswith("@") or "ضع_" in TELEGRAM_TOKEN:
+        return c
+    try:
+        r = requests.get(f"{TG_API}/getChat", params={"chat_id": c}, timeout=10).json()
+        if r.get("ok"):
+            return str(r["result"]["id"])
+        log(f"ما قدرت أجيب رقم {c}: {r.get('description')}")
+    except Exception as e:
+        log(f"ما قدرت أجيب رقم {c}:", e)
+    return c
+
+
 def _load_chats():
     for c in TELEGRAM_CHAT_ID.split(","):
         c = c.strip()
         if c and "ضع_" not in c:
-            CHATS.add(c)
+            CHATS.add(_resolve_chat(c))
     try:
         with open(CHATS_FILE, encoding="utf-8") as f:
-            CHATS.update(line.strip() for line in f if line.strip())
+            CHATS.update(_resolve_chat(line) for line in f if line.strip())
     except FileNotFoundError:
         pass
 
@@ -498,6 +524,11 @@ def discover_groups():
         if new_id:
             CHATS.discard(cid)
             cid = str(new_id)
+        uname = chat.get("username")
+        if uname and f"@{uname}" in CHATS:      # نفس القناة محطوطة بالاسم: نبدّله بالرقم بدون إضافة
+            CHATS.discard(f"@{uname}")
+            CHATS.add(cid)
+            continue
         if cid not in CHATS:
             CHATS.add(cid)
             _save_chat(cid)
@@ -1626,7 +1657,7 @@ def scan_pwl_4h(symbols, sent):
         checks4h.append(("low", "pwl4h", check_pwl_1h, ENABLE_PWL_4H))
     if ENABLE_PWH_4H or ENABLE_WKOPT:
         checks4h.append(("high", "pwh4h", check_pwh_1h, ENABLE_PWH_4H))
-    if not checks4h:
+    if not checks4h and not ENABLE_PD4H:
         return
     hits = 0
     for t, df in download_batches(symbols, 100, period="15d", interval=f"{GAP_BASE_MIN}m",
@@ -1634,6 +1665,13 @@ def scan_pwl_4h(symbols, sent):
         try:
             df = to_ny(df)[OHLC]
             if df.empty:
+                continue
+            if ENABLE_PD4H and t in PD4H_SYMBOLS:   # (13) سحب اليوم السابق - أسهمه بس، نفس البيانات
+                try:
+                    hits += pd4h_check(t, df, now, sent)
+                except Exception as e:
+                    log(f"سحب اليوم السابق: {t}: خطأ - {e}")
+            if t not in WATCH_SYMBOLS:              # سهم من قائمة (13) بس: باقي الأقسام ما تفحصه
                 continue
             # مستويات الأسبوع السابق من البري + الماركت + الأفتر (بدون الليلي)
             lv4 = prev_week_ext_levels(df, wk0)
@@ -1698,6 +1736,156 @@ def scan_pwl_4h(symbols, sent):
     free_memory()
     if hits:
         log(f"[{datetime.now():%H:%M}] سحب دعم/مقاومة الأسبوع السابق (4 ساعات): {hits} تنبيه")
+
+
+# ================== (13) سحب سيولة دعم ومقاومة اليوم السابق - فريم 4 ساعات ==================
+def prev_day_ext_levels(df, day_start):
+    """قاع وقمة آخر يوم تداول قبل day_start (بري + ماركت + أفتر، بدون الليلي).
+    يرجع {"low": (القاع، اليوم), "high": (القمة، اليوم)} أو None."""
+    pw = df[df.index < day_start]
+    if pw.empty:
+        return None
+    pw = pw.between_time("04:00", "19:59")
+    if pw.empty:
+        return None
+    last_day = pw.index[-1].normalize()
+    pd_ = pw[pw.index >= last_day]
+    lows, highs = pd_["Low"].astype(float), pd_["High"].astype(float)
+    d = last_day.date()
+    return {"low": (float(lows.min()), d), "high": (float(highs.max()), d)}
+
+
+def _pd4h_message(t, side, lvl, r, pd_lv, pw_lv):
+    t1 = pd.Timestamp(r["start"]).tz_convert(LOCAL_TZ)
+    t2 = pd.Timestamp(r["end"]).tz_convert(LOCAL_TZ)
+    color = "خضراء 🟢" if r["close"] > r["open"] else "حمراء 🔴"
+    if side == "low":
+        head = "💧 سحب سيولة دعم اليوم السابق — فريم 4 ساعات"
+        wick = f"ذيل الشمعة نزل لـ {r['low']:.2f}  (-{r['depth']:.2f}% تحت الدعم)"
+        close = f"الإغلاق {r['close']:.2f} رجع فوق الدعم | الشمعة {color}"
+        trade = ("📈 الاتجاه المتوقع: كول (صعود)\n"
+                 f"❌ كسر قاع شمعة السحب {r['low']:.2f} يفشل الاتجاه")
+        note = ("أول لمس للدعم اليوم" if r["first_touch"] else
+                f"قبلها {r['closes_beyond']} شمعة قفلت تحت الدعم" if r["closes_beyond"] else
+                "لمس الدعم قبل وما قفل تحته")
+    else:
+        head = "🔻 سحب سيولة مقاومة اليوم السابق — فريم 4 ساعات"
+        wick = f"ذيل الشمعة طلع لـ {r['high']:.2f}  (+{r['depth']:.2f}% فوق المقاومة)"
+        close = f"الإغلاق {r['close']:.2f} رجع تحت المقاومة | الشمعة {color}"
+        trade = ("📉 الاتجاه المتوقع: بوت (هبوط)\n"
+                 f"❌ كسر قمة شمعة السحب {r['high']:.2f} يفشل الاتجاه")
+        note = ("أول لمس للمقاومة اليوم" if r["first_touch"] else
+                f"قبلها {r['closes_beyond']} شمعة قفلت فوق المقاومة" if r["closes_beyond"] else
+                "لمس المقاومة قبل وما قفل فوقها")
+    px = r["close"]
+    dist = lambda x: f"{(x / px - 1) * 100:+.1f}%"
+    (pdl, pdd), (pdh, _) = pd_lv["low"], pd_lv["high"]
+    levels = ["📊 المستويات:",
+              f"مقاومة اليوم السابق ({pdd:%m-%d}): {pdh:.2f} ({dist(pdh)})",
+              f"دعم اليوم السابق ({pdd:%m-%d}): {pdl:.2f} ({dist(pdl)})"]
+    if pw_lv:      # كول ← مقاومة الأسبوع (الهدف فوق) | بوت ← دعم الأسبوع (الهدف تحت)
+        if side == "low":
+            pwh, pwhd = pw_lv["high"]
+            levels.append(f"مقاومة الأسبوع السابق ({pwhd:%m-%d}): {pwh:.2f} ({dist(pwh)})")
+        else:
+            pwl, pwld = pw_lv["low"]
+            levels.append(f"دعم الأسبوع السابق ({pwld:%m-%d}): {pwl:.2f} ({dist(pwl)})")
+    return (f"{head}\nالسهم: ${t}\n"
+            f"{'الدعم (قاع' if side == 'low' else 'المقاومة (قمة'} اليوم السابق): {lvl:.2f}\n"
+            f"{wick}\n{close}\n{note}\n"
+            f"الشمعة: {t1:%H:%M} - {t2:%H:%M} (توقيتك)\n\n"
+            + "\n".join(levels) + f"\n\n{trade}")
+
+
+def pd4h_check(t, df, now, sent):
+    """يفحص سهم واحد (df = شموع 15 دقيقة نيويورك) ويرسل التنبيه لو تحقق. يرجع عدد التنبيهات."""
+    day0 = now.normalize()
+    pd_lv = prev_day_ext_levels(df, day0)
+    if not pd_lv:
+        return 0
+    pw_lv = prev_week_ext_levels(df, _week_start(now))
+    c4h = only_closed(to_frame(df, 240, overnight=False), df.index.max(), now)
+    hits = 0
+    for side, fn in (("low", check_pwl_1h), ("high", check_pwh_1h)):
+        lvl = pd_lv[side][0]
+        r = fn(c4h, lvl, day0, wick_only=PD4H_WICK_ONLY)       # شموع اليوم بس
+        if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
+            continue
+        key = f"{t}-pd4h-{side}-w{_week_start(now):%Y%m%d}"   # تنبيه واحد بالأسبوع لكل جهة (دعم / مقاومة)
+        if key in sent:
+            continue
+        sent.add(key)
+        _append_line(GAP_SENT_FILE, key)
+        hits += 1
+        send_telegram(with_gamma(_pd4h_message(t, side, lvl, r, pd_lv, pw_lv), t, r["close"])
+                      + "\n\n" + PD4H_CHECK_LINE, kind="sweep", sym=t)
+    return hits
+
+
+PD4H_TEST_ID = "1"   # رسالة تجريبية مرة وحدة بعد الرفع — غيّر الرقم لو تبي وحدة ثانية
+
+
+def pd4h_send_test_once():
+    """يرسل تنبيه تجريبي لقسم (13) مرة وحدة (يتذكرها في /data عشان ما تتكرر مع كل تشغيل)."""
+    if not ENABLE_PD4H:
+        return
+    marker = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "pd4h_test_sent.txt")
+    try:
+        with open(marker, encoding="utf-8") as f:
+            if f.read().strip() == PD4H_TEST_ID:
+                return
+    except Exception:
+        pass
+    now = pd.Timestamp.now(tz=NY)
+    t = "NVDA"                          # سهم حقيقي عشان القاما تنحسب من عقوده
+    spot = 183.45
+    try:
+        import yfinance as yf
+        with _YF_LOCK:
+            h = yf.Ticker(t).history(period="5d", interval="1d")
+        if not h.empty:
+            spot = float(h["Close"].iloc[-1])
+    except Exception as e:
+        log(f"سحب اليوم السابق: رسالة التجربة: ما قدرت أجيب سعر {t}: {e}")
+    k = spot / 183.45                   # المستويات الوهمية تتحجم على سعره الحقيقي
+    yday, wk = (now - pd.Timedelta(days=1)).date(), (now - pd.Timedelta(days=6)).date()
+    pd_lv = {"low": (178.40 * k, yday), "high": (184.20 * k, yday)}
+    pw_lv = {"low": (172.90 * k, wk), "high": (189.60 * k, wk)}
+    r = {"open": 183.10 * k, "high": 185.05 * k, "low": 182.70 * k, "close": spot, "depth": 0.46,
+         "start": now.floor("h") - pd.Timedelta(hours=4), "end": now.floor("h"),
+         "closes_beyond": 0, "first_touch": True}
+    send_telegram("🧪 رسالة تجريبية - هذا مو تنبيه حقيقي (المستويات وهمية، القاما حقيقية)\n\n"
+                  + with_gamma(_pd4h_message(t, "high", 184.20 * k, r, pd_lv, pw_lv), t, spot)
+                  + "\n\n" + PD4H_CHECK_LINE
+                  + "\n\nلو وصلتك هالرسالة، تنبيهات القسم الحقيقية بتوصل لنفس المكان.",
+                  kind="sweep", sym=t)
+    try:
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write(PD4H_TEST_ID)
+    except Exception as e:
+        log(f"سحب اليوم السابق: ما قدرت أحفظ علامة الرسالة التجريبية: {e}")
+
+
+def pd4h_self_test():
+    """python short_bot.py --pd4htest — يجرب (13) بدون نت."""
+    ny = ZoneInfo(NY)
+    m15 = pd.date_range("2026-11-09 00:00", "2026-11-18 23:45", freq="15min", tz=ny)
+    df = pd.DataFrame({"Open": 100.0, "High": 100.5, "Low": 99.5, "Close": 100.0}, index=m15)
+    df.loc[pd.Timestamp("2026-11-12 10:00", tz=ny), ["High", "Low"]] = [104.0, 96.0]  # الأسبوع السابق
+    df.loc[pd.Timestamp("2026-11-17 11:00", tz=ny), "High"] = 102.0                   # قمة أمس
+    df.loc[pd.Timestamp("2026-11-17 14:00", tz=ny), "Low"] = 98.0                     # قاع أمس
+    df.loc[pd.Timestamp("2026-11-17 22:00", tz=ny), ["High", "Low"]] = [110, 90]      # ليلي = ما يدخل
+    df.loc[pd.Timestamp("2026-11-18 09:00", tz=ny), "High"] = 102.6                   # سحب قمة أمس
+    df = df[df.index < pd.Timestamp("2026-11-18 12:00", tz=ny)]
+    now = pd.Timestamp("2026-11-18 12:02", tz=ny)
+    lv = prev_day_ext_levels(df, now.normalize())
+    assert lv["high"][0] == 102.0 and lv["low"][0] == 98.0, lv
+    c4h = only_closed(to_frame(df, 240, overnight=False), df.index.max(), now)
+    r = check_pwh_1h(c4h, 102.0, now.normalize())
+    assert r and r["high"] == 102.6 and r["close"] < 102.0, r
+    assert check_pwl_1h(c4h, 98.0, now.normalize()) is None
+    print("✅ (13) قمة أمس 102 انسحبت (102.6) والإغلاق تحتها، والليلي ما دخل")
+    print(_pd4h_message("TEST", "high", 102.0, r, lv, prev_week_ext_levels(df, _week_start(now))))
 
 
 # ================== (1) الإنفيرجن IFVG - فريم ساعة و4 ساعات ==================
@@ -3802,6 +3990,9 @@ def main():
         _load_chats()
         pw4h_now(list(WATCH_SYMBOLS), send="--send" in sys.argv)
         return
+    if "--pd4htest" in sys.argv:
+        pd4h_self_test()
+        return
     if "--frimontest" in sys.argv:
         frimon_self_test()
         return
@@ -3823,6 +4014,8 @@ def main():
             pw4h_txt += (f" + سحب السيولة الأسبوعي {WKOPT_FRAME_MIN // 60} ساعات مع عقد{' بوت بس' if WKOPT_PUT_ONLY else ''} "
                          + (f"(الأسهم {WKOPT_MIN_PRICE}$-{WKOPT_MAX_PRICE}$، " if WKOPT_MAX_PRICE else "(كل القائمة، ")
                          + "تنبيه واحد لكل سهم بالأسبوع)")
+        if ENABLE_PD4H:
+            pw4h_txt += f" + سحب دعم/مقاومة اليوم السابق 4 ساعات مع القاما ({', '.join(PD4H_SYMBOLS)})"
         if ENABLE_IFVG and (ENABLE_IFVG_1H or ENABLE_IFVG_4H):
             fr = [n for on, n in ((ENABLE_IFVG_1H, "ساعة"), (ENABLE_IFVG_4H, "4 ساعات")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
@@ -3837,6 +4030,7 @@ def main():
                       f"{pw4h_txt}\n"
                       f"الوقت: {pd.Timestamp.now(tz=LOCAL_TZ):%Y-%m-%d %H:%M} (توقيتك)")
     if not once:
+        pd4h_send_test_once()
         start_algo_thread()
         start_news_thread()
         if ENABLE_FRIMON:        # (11) سحب قمة الجمعة/الاثنين + دعم الأسبوع السابق → كول
@@ -3860,9 +4054,10 @@ def main():
         discover_groups()
 
         # (1ك-2) سحب سيولة دعم ومقاومة الأسبوع السابق - فريم 4 ساعات - كل 5 دقايق وقت السوق
-        if (ENABLE_PWL_4H or ENABLE_PWH_4H or ENABLE_WKOPT) and (once or us_market_open()) \
+        if (ENABLE_PWL_4H or ENABLE_PWH_4H or ENABLE_WKOPT or ENABLE_PD4H) and (once or us_market_open()) \
                 and time.time() - pwl_last >= PWL_EVERY_MIN * 60:
-            scan_pwl_4h(list(WATCH_SYMBOLS), gap_sent)
+            scan_pwl_4h(list(dict.fromkeys(list(WATCH_SYMBOLS) + (PD4H_SYMBOLS if ENABLE_PD4H else []))),
+                        gap_sent)
             pwl_last = time.time()
 
         # (1) الإنفيرجن IFVG - فريم ساعة و4 ساعات - بعد إغلاق كل ساعة بدقيقة

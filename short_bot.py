@@ -29,21 +29,6 @@
     - كل جمعة: قائمة بتجزئات آخر 7 أيام
     - ENABLE_RSPLIT_SHORT = False يطفيه
 
-(4د) سكنر الزخم - من ألباكا، كل دقيقة
-    - الأسهم من 1$ إلى 15$، طالعة 10% إلى 20% عن إغلاق أمس، فوليوم نسبي ضعفين وفوق، و500 ألف سهم وفوق
-    - السعر قريب من قمة اليوم (2%)، ولازم يكون ساحب قاع أمس أو قاع الأسبوع اللي قبله (MOM_REQUIRE_SWEEP)
-    - ENABLE_MOMENTUM = False يطفيه
-
-(2) ماسح السيولة (البني ستوك) - كل 5 دقايق وقت السوق الرسمي
-    - أسهم ناسداك من 1$ إلى 5$
-    - الشروط كلها مع بعض:
-        * الحجم النسبي: حجم اليوم 5 أضعاف متوسط آخر 20 يوم أو أكثر
-        * اختراق: السعر فوق أعلى قمة آخر 20 يوم، وقريب من قمة اليوم (ما رجع أكثر من 3%)
-        * الفلوت أقل من 20 مليون سهم
-        * طالع 5% أو أكثر عن إغلاق أمس
-    - كل سهم يتنبه عليه مرة وحدة باليوم
-    - ENABLE_FLOW = False يطفيه
-
 (6) كشف خوارزميات التقطيع - من ألباكا
     - الأسهم: أسهم ناسداك اللي سعرها من 1$ إلى 15$ وسوت تجزئة عكسية خلال آخر 3 شهور
     - يدور على صفقات صغيرة (10 أسهم وأقل) بنفس الحجم بالضبط، مثل 1، 1، 1، 1...
@@ -65,13 +50,6 @@
 (6د) الآيس بيرغ - نفس أسهم (6ب) ونفس الصفقات (ما يزيد طلبات على ألباكا)
     - 500 صفقة أو أكثر ورا بعض بنفس الحجم ونفس السعر بالضبط (من سهم إلى 10 أسهم)، والفاصل ثانيتين أو أقل
     - تحديث عند 1000 ثم 2000 ... | ALGO_ICE=0 في Railway يطفيه
-
-(7) الأخبار الإيجابية - من ألباكا (نفس المفاتيح) - 24 ساعة، كل دقيقة
-    - اندماج/استحواذ، موافقة FDA، نتائج دراسة إيجابية، عقود وشراكات، نتائج قوية ورفع توقعات،
-      ترقية محلل، إعادة شراء وتوزيعات
-    - يتجاهل الخبر لو فيه كلمة سلبية (طرح أسهم، تجزئة عكسية، دعوى، تخفيض، إفلاس، إلغاء ...)
-    - الأسهم: سعرها من 1$ إلى 15$ وقيمتها السوقية من 5 مليون إلى 100 مليون دولار
-    - NEWS=0 في Railway يطفيه
 
 (1ك-2) سحب سيولة دعم ومقاومة الأسبوع السابق - فريم 4 ساعات - قائمة المراقبة (WATCH_SYMBOLS)
     - الدعم: شمعة 4 ساعات ذيلها بس نزل تحت قاع الأسبوع السابق، وافتتاحها وإغلاقها فوقه → كول
@@ -99,7 +77,6 @@
   python short_bot.py               # يشتغل باستمرار
   python short_bot.py --once        # فحص مرة وحدة بس
   python short_bot.py --algotest    # يجرب كشف خوارزميات التقطيع (بدون نت)
-  python short_bot.py --newstest    # يجرب تصنيف الأخبار (بدون نت)
   python short_bot.py --pwltest     # يجرب سحب الأسبوع السابق (بدون نت)
   python short_bot.py --pw4hnow [--send]   # سحب الأسبوع السابق 4 ساعات على بيانات حقيقية
   python short_bot.py --frimontest  # يجرب سحب الجمعة/الاثنين (بدون نت)
@@ -118,6 +95,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import csv
 import math
+import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
@@ -150,20 +128,18 @@ GAP_OVERNIGHT = bool(TIINGO_TOKEN)   # يتفعل لحاله لو حطيت ال�
 # ⭐ قائمتك الموحدة (قائمة المراقبة) - عليها سحب الأسبوع السابق 4 ساعات وسحب الجمعة/الاثنين
 TEST_ON_START = True             # True = يرسل رسالة اختبار كل ما البوت يشتغل | False = بدون
 ONE_LIST = False  # True = كل الأقسام على القائمة هذي | False = كل قسم يرجع لأسهمه القديمة
-WATCH_SYMBOLS = [   # قائمتك (15 نوفمبر 2026) - 81 سهم + QQQ + SPY + سباكس
+WATCH_SYMBOLS = [   # قائمتك (15 نوفمبر 2026) - 78 سهم + QQQ + SPY + GLD
     "NVDA", "CRM", "AVGO", "META", "TSLA", "SPCX", "AMD", "LITE", "AAPL", "RKLB",
     "UNH", "MU", "LLY", "ADBE", "QCOM", "SHOP", "GOOGL", "MSFT", "MSTR", "AMZN",
     "DDOG", "ACN", "GEV", "LRCX", "PLTR", "OKTA", "ORCL", "INTC", "AAOI", "CRDO",
     "SNDK", "STX", "CRCL", "WDC", "SKHY", "NBIS", "CRWV", "CRWD", "MRVL", "ARM",
-    "AMAT", "PANW", "SNOW", "NOW", "DELL", "ENPH", "VRT", "RIVN", "KLAC", "MCHP",
+    "AMAT", "PANW", "SNOW", "NOW", "DELL", "ENPH", "KLAC", "MCHP",
     "FTNT", "ADSK", "MDB", "CSCO", "CLS", "BE", "MOD", "TEM", "CELH", "CHWY",
-    "CROX", "GRMN", "CTSH", "BBIO", "DOCS", "ADMA", "CTAS", "MSM", "SMH", "ABBV",
-    "HAS", "KO", "LULU", "APH", "SNPS", "IBM", "ORLY", "HD", "MRNA", "SMCI",
-    "TEAM",
+    "CROX", "GRMN", "CTSH", "CTAS", "SMH", "ABBV",
+    "HAS", "KO", "LULU", "APH", "SNPS", "IBM", "HD", "MRNA", "SMCI",
+    "TEAM", "IREN", "RIOT", "TGT", "JNJ",
     # صناديق
-    "QQQ", "SPY",
-    # مؤشرات (من ياهو): سباكس S&P 500
-    "^GSPC",
+    "QQQ", "SPY", "GLD",
 ]
 # المؤشرات ما لها صفقات ولا بيانات في ألباكا، فتنشال من أقسام ألباكا (الخوارزميات، الزخم، الجلسة الليلية)
 INDEX_SYMBOLS = {"^GSPC", "^NDX"}
@@ -178,19 +154,6 @@ def stocks_only(syms):
 GAP_BASE_MIN = 15                # البيانات تنحمّل بشموع 15 دقيقة، وكل الفريمات تنبني منها
 GAP_SCAN_AFTER_CLOSE_MIN = (1, 5, 12)   # يفحص بعد الإغلاق بكذا دقيقة (الأولى هي الأساسية)
 GAP_SENT_FILE = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "gap_sent.txt")   # في /data عشان ما يعيد نفس التنبيه بعد إعادة التشغيل أو الرفع
-
-# ---- (2) ماسح السيولة - البني ستوك ----
-ENABLE_FLOW = False  # ماسح السيولة للبني ستوك (مطفي 15 نوفمبر 2026)
-FLOW_MIN_PRICE = 1               # أقل سعر
-FLOW_MAX_PRICE = 5               # أعلى سعر
-FLOW_MIN_AVG_VOLUME = 100_000    # يشيل الأسهم الميتة
-FLOW_RVOL = 5                    # حجم اليوم لازم يكون كذا ضعف متوسط آخر 20 يوم
-FLOW_AVG_DAYS = 20               # عدد الأيام لمتوسط الحجم وقمة الاختراق
-FLOW_MAX_FLOAT = 20_000_000      # الفلوت أقل من كذا سهم
-FLOW_MIN_CHANGE = 0.05           # طالع 5% أو أكثر عن إغلاق أمس
-FLOW_MAX_PULLBACK = 0.03         # ما رجع أكثر من 3% عن قمة اليوم
-FLOW_EVERY_MIN = 5               # كل كم دقيقة يفحص
-FLOW_SENT_FILE = "flow_sent.txt" # عشان ما يعيد نفس السهم بنفس اليوم
 
 # ---- (4ج) نزول الشورت المتاح أكثر من 90% (Interactive Brokers) ----
 ENABLE_BORROW_DROP = False  # مطفي (16 نوفمبر 2026) | True = يرجع
@@ -215,19 +178,6 @@ BZ_STATE_FILE = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "
 
 
 
-# ---- (4د) سكنر الزخم: ارتفاع قوي + فوليوم نسبي + قريب من قمة اليوم (Alpaca، كل دقيقة) ----
-ENABLE_MOMENTUM = True  # True = شغال | False = مطفي
-MOM_MIN_PRICE = 1                # أقل سعر
-MOM_MAX_PRICE = 15               # أعلى سعر (كان 10)
-MOM_MIN_CHANGE = 10              # أقل ارتفاع % عن إغلاق أمس
-MOM_MAX_CHANGE = 20              # أعلى ارتفاع % - أي سهم فوقه ما ينبّه عليه
-MOM_MIN_RVOL = 2                 # الفوليوم النسبي (ضعف المعتاد وفوق)
-MOM_MIN_VOLUME = 500_000         # أقل فوليوم لليوم
-MOM_NEAR_HIGH_PCT = 2            # السعر ما يبعد عن قمة اليوم أكثر من 2%
-MOM_EVERY_SEC = 60               # كل كم ثانية يفحص
-MOM_REQUIRE_SWEEP = True         # لازم السهم ساحب سيولة دعم يومي (قاع أمس) أو أسبوعي (قاع الأسبوع اللي راح)
-                                 # يعني قاع اليوم نزل تحت الدعم والسعر الحين فوقه | False = يطفي الشرط
-
 # ---- (1ك-2) سحب سيولة دعم ومقاومة الأسبوع السابق - فريم 4 ساعات - قائمة المراقبة ----
 PWL_EVERY_MIN = 5                # كل كم دقيقة يفحص وقت السوق
 PWL_MAX_ALERT_DELAY_MIN = 30     # ما ينبه على شمعة قفلت من أكثر من كذا دقيقة
@@ -239,6 +189,16 @@ PWL_MAX_ALERT_DELAY_MIN = 30     # ما ينبه على شمعة قفلت من �
 ENABLE_PWL_4H = False  # الدعم: True = شغال | False = مطفي
 ENABLE_PWH_4H = False  # المقاومة: True = شغال | False = مطفي
 PW4H_WICK_ONLY = True  # True = الذيل بس يكسر المستوى، الافتتاح والإغلاق كلهم بجهته | False = الإغلاق بس
+
+# ---- تأكيد سحب السيولة (للأقسام (1ك-2) و (12) و (13)) ----
+#   التنبيه ما يطلع على شمعة السحب نفسها، يطلع على شمعة التأكيد اللي بعدها:
+#   🟢 الدعم: شمعة سحب ذيلها بس تحت الدعم (الافتتاح والإغلاق فوقه)، وبعدها شمعة تقفل فوق قمة شمعة السحب
+#      أو ترجع تختبر الدعم وما تكسر قاع شمعة السحب → كول
+#   🔴 المقاومة: شمعة سحب ذيلها فوق المقاومة، وبعدها شمعة ترجع تختبر المقاومة وما تكسر قمة شمعة السحب
+#      ولا تقفل فوق المقاومة → بوت
+#   يلغي النموذج: كسر قاع/قمة شمعة السحب، أو إغلاق شمعة بالجهة الثانية من المستوى
+SWEEP_CONFIRM = True             # True = يستنى التأكيد | False = ينبه على شمعة السحب نفسها مثل قبل
+SWEEP_RETEST_PCT = 0.3           # إعادة الاختبار: السعر يوصل للمستوى أو يقرب منه بكذا % (0 = لازم يلمسه)
 
 # ---- (13) سحب سيولة دعم ومقاومة اليوم السابق - فريم 4 ساعات - قائمة المراقبة ----
 #   الدعم: شمعة 4 ساعات (من اليوم) ذيلها نزل تحت قاع اليوم السابق وقفلت فوقه → كول
@@ -394,19 +354,6 @@ ALGO_ICE_MIN_SIZE = 1                     # أقل حجم للصفقة: سهم �
 ALGO_ICE_MAX_SIZE = 10                    # أعلى حجم للصفقة: 10 أسهم
 ALGO_ICE_MAX_GAP_SEC = 2                  # "وقت قصير": أكثر من كذا ثانية بين صفقتين = تنقطع السلسلة
 ALGO_ICE_REALERT_MIN = 5                  # ما يعيد التنبيه لنفس السهم ونفس الحجم والسعر قبل كذا دقيقة
-
-# ---- (7) الأخبار الإيجابية - من ألباكا (نفس المفاتيح) ----
-# اندماج، استحواذ، موافقة FDA، عقود وشراكات، نتائج قوية، رفع توقعات، ترقية، إعادة شراء ...
-NEWS = os.environ.get("NEWS", "1") != "0"  # 0 = يطفي هالقسم
-NEWS_POLL_SEC = 60                    # كل كم ثانية يسحب الأخبار الجديدة (24 ساعة، كل الأيام)
-NEWS_MAX_AGE_MIN = 30                 # يتجاهل الخبر اللي عمره أكثر من كذا دقيقة (عشان ما يرسل قديم أول ما يشتغل)
-NEWS_MAX_SYMBOLS = 3                  # يتجاهل الخبر اللي فيه أكثر من كذا سهم (ملخصات السوق العامة)
-NEWS_MIN_PRICE = 1                    # أقل سعر سهم (0 = بدون حد)
-NEWS_MAX_PRICE = 15                   # أعلى سعر سهم (0 = بدون حد)
-NEWS_MAX_MARKET_CAP = 100_000_000     # القيمة السوقية أقل من 100 مليون دولار (0 = بدون حد)
-NEWS_MIN_MARKET_CAP = 5_000_000       # القيمة السوقية 5 مليون دولار وفوق
-NEWS_EXCHANGES = ("nasdaq", "nyse", "amex")   # البورصات اللي تنجاب منها القيم السوقية
-NEWS_SENT_FILE = "news_sent.txt"      # عشان ما يعيد نفس الخبر لو البوت أعاد التشغيل
 
 # ---- المحتوى التعليمي ----
 ADD_EDUCATION = False            # الشرح التعليمي تحت التنبيهات: False = محذوف (رسائل أقصر) | True = يرجع
@@ -582,6 +529,7 @@ EDUCATION = {
 
 # ================== القطاع (تقنية، صحة، ...) - يتكتب تحت اسم السهم بالتنبيه ==================
 SHOW_SECTOR = True               # True = يكتب قطاع السهم بكل الأقسام
+SYMBOL_FIRST = True              # True = رمز السهم أول سطر بالرسالة | False = مثل قبل
 SECTOR_FILE = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "sectors.txt")
 SECTOR_AR = {
     "technology": "تقنية 💻", "health care": "صحة 🏥", "healthcare": "صحة 🏥",
@@ -707,12 +655,14 @@ def _send_photo_one(chat_id, png, caption=None):
 
 
 def send_telegram(text, kind=None, sym=None, photo=None):
+    text = "للمتابعة\n" + text
+    if sym and SYMBOL_FIRST:                       # الرمز أول سطر بالرسالة (وينشال سطر "السهم:" المكرر)
+        text = f"${sym}\n" + "\n".join(ln for ln in text.split("\n") if ln.strip() != f"السهم: ${sym}")
     if sym and SHOW_SECTOR:
         try:
             text = _with_sector(text, sym)
         except Exception as e:
             log(f"القطاع: {sym}: {e}")
-    text = "للمتابعة\n" + text
     for code, name in INDEX_NAMES.items():         # $^GSPC ← سباكس S&P 500 (^GSPC)
         text = text.replace(f"${code}", f"{name} ({code})")
     if ADD_EDUCATION and kind in EDUCATION:
@@ -959,77 +909,6 @@ def build_universe(label, min_price, max_price, min_vol, include_nyse):
             if min_price <= last <= max_price and avg_vol >= min_vol]
     log(f"{label}: {len(keep)} سهم سعرها {min_price}-{max_price}$ وعليها تداول")
     return keep
-
-
-# ================== (2) ماسح السيولة - البني ستوك ==================
-def check_flow(df):
-    """df = شموع يومية (آخر شمعة = اليوم). يرجع التفاصيل لو الشروط كلها تحققت (ما عدا الفلوت)."""
-    if len(df) < FLOW_AVG_DAYS + 2:
-        return None
-    today, past = df.iloc[-1], df.iloc[-(FLOW_AVG_DAYS + 1):-1]
-    avg_vol = float(past["Volume"].mean())
-    vol, close, high = float(today["Volume"]), float(today["Close"]), float(today["High"])
-    prev_close = float(past["Close"].iloc[-1])
-    top = float(past["High"].max())
-    if avg_vol <= 0 or prev_close <= 0 or high <= 0:
-        return None
-    rvol = vol / avg_vol
-    change = close / prev_close - 1
-    pullback = 1 - close / high
-    if not (FLOW_MIN_PRICE <= close <= FLOW_MAX_PRICE):
-        return None
-    if rvol < FLOW_RVOL or change < FLOW_MIN_CHANGE:
-        return None
-    if close <= top or pullback > FLOW_MAX_PULLBACK:
-        return None
-    return {"close": close, "high": high, "prev": prev_close, "top": top, "vol": vol,
-            "avg_vol": avg_vol, "rvol": rvol, "change": change, "dollar": close * vol}
-
-
-def _flow_message(t, r, flt):
-    return (f"💰 دخول سيولة + اختراق\n"
-            f"السهم: ${t}\n"
-            f"السعر: {r['close']:.2f}$ ({r['change'] * 100:+.1f}% عن إغلاق أمس)\n"
-            f"الحجم النسبي: {r['rvol']:.1f} ضعف متوسط {FLOW_AVG_DAYS} يوم\n"
-            f"حجم اليوم: {int(r['vol']):,} سهم (≈ {r['dollar']:,.0f}$)\n"
-            f"اخترق قمة {FLOW_AVG_DAYS} يوم: {r['top']:.2f}$ | قمة اليوم: {r['high']:.2f}$\n"
-            f"الفلوت: {int(flt):,} سهم\n"
-            f"الوقت: {pd.Timestamp.now(tz=LOCAL_TZ):%H:%M} (توقيتك)")
-
-
-def scan_flow(tickers, already_sent):
-    hits = 0
-    day = pd.Timestamp.now(tz=NY).date()
-    cands = []
-    for t, df in download_batches(tickers, UNIVERSE_BATCH, period="3mo", interval="1d", prepost=False):
-        try:
-            if pd.Timestamp(df.index[-1]).date() != day:
-                continue                          # ما فيه شمعة اليوم
-            if f"{t}-{day}" in already_sent:
-                continue
-            r = check_flow(df)
-            if r:
-                cands.append((t, r))
-        except Exception:
-            continue
-    for t, r in sorted(cands, key=lambda x: -x[1]["rvol"]):
-        flt = get_algo_float(t)                   # الفلوت يتجاب للمرشحين بس (أسرع)
-        if flt is None or flt <= 0 or flt >= FLOW_MAX_FLOAT:
-            continue
-        key = f"{t}-{day}"
-        already_sent.add(key)
-        _append_line(FLOW_SENT_FILE, key)
-        hits += 1
-        send_telegram(_flow_message(t, r, flt), kind="flow", sym=t)
-    free_memory()
-    log(f"[{datetime.now():%H:%M}] ماسح السيولة: خلص الفحص - {len(cands)} مرشح، {hits} تنبيه جديد")
-
-
-def regular_session_open():
-    now = pd.Timestamp.now(tz=NY)
-    if now.weekday() >= 5:
-        return False
-    return now.replace(hour=9, minute=30) <= now <= now.replace(hour=16, minute=10)
 
 
 # ================== ملفات المرسل (عشان ما يتكرر التنبيه) ==================
@@ -1380,153 +1259,13 @@ def bz_run_forever():
         time.sleep(BZ_EVERY_MIN * 60)
 
 
-# ================== (4د) سكنر الزخم (Alpaca لحظي) ==================
-#   ارتفاع قوي + فوليوم نسبي عالي + السعر قريب من قمة اليوم - كل دقيقة وقت السوق الرسمي
-_mom_levels = {}
-_mom_day = None
-_mom_pwl = {}      # قاع الأسبوع اللي راح لكل سهم (يتصفر كل يوم)
-
-
-def _mom_prev_week_low(sym):
-    """قاع شمعة الأسبوع اللي راح من Alpaca (يتخزن لباقي اليوم)."""
-    if sym in _mom_pwl:
-        return _mom_pwl[sym]
-    low = None
-    try:
-        today = datetime.now(ZoneInfo(NY)).date()
-        monday = today - timedelta(days=today.weekday())
-        start = (monday - timedelta(days=21)).isoformat()
-        bars = _mom_get(f"/v2/stocks/{sym}/bars",
-                        {"timeframe": "1Week", "start": start, "feed": "sip",
-                         "adjustment": "split", "limit": 10}).get("bars") or []
-        prev = [b for b in bars if pd.Timestamp(b["t"]).tz_convert(NY).date() < monday]
-        if prev:
-            low = float(prev[-1]["l"])
-    except Exception as e:
-        log(f"الزخم: خطأ قاع الأسبوع {sym}: {e}")
-    _mom_pwl[sym] = low
-    return low
-
-
-def _mom_sweeps(sym, price, day_low, prev_low):
-    """الدعوم اللي انسحبت: قاع اليوم نزل تحتها والسعر الحين فوقها."""
-    out = []
-    if prev_low and day_low < prev_low < price:
-        out.append(f"دعم يومي (قاع أمس {prev_low:.2f}$)")
-    pwl = _mom_prev_week_low(sym)
-    if pwl and day_low < pwl < price:
-        out.append(f"دعم أسبوعي (قاع الأسبوع اللي راح {pwl:.2f}$)")
-    return out
-
-
-def _mom_get(path, params=None):
+# ================== طلبات بيانات ألباكا (تستخدمها سلسلة العقود) ==================
+def _alpaca_data_get(path, params=None):
     r = requests.get("https://data.alpaca.markets" + path, params=params or {}, timeout=20,
                      headers={"APCA-API-KEY-ID": ALPACA_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET,
                               "Accept": "application/json"})
     r.raise_for_status()
     return r.json()
-
-
-def _mom_candidates():
-    if ONE_LIST:
-        return stocks_only(WATCH_SYMBOLS)
-    syms = set()
-    try:
-        for g in _mom_get("/v1beta1/screener/stocks/movers", {"top": 50}).get("gainers", []):
-            syms.add(g["symbol"])
-    except Exception as e:
-        log(f"الزخم: خطأ movers: {e}")
-    try:
-        for a in _mom_get("/v1beta1/screener/stocks/most-actives",
-                          {"by": "volume", "top": 100}).get("most_actives", []):
-            syms.add(a["symbol"])
-    except Exception as e:
-        log(f"الزخم: خطأ most-actives: {e}")
-    return [s for s in syms if s.isalpha() and len(s) <= 5]
-
-
-def _mom_snapshots(symbols):
-    out = {}
-    for i in range(0, len(symbols), 100):
-        try:
-            out.update(_mom_get("/v2/stocks/snapshots",
-                                {"symbols": ",".join(symbols[i:i + 100]), "feed": "sip"}))
-        except Exception as e:
-            log(f"الزخم: خطأ snapshots: {e}")
-    return out
-
-
-def mom_check(sym, snap, frac):
-    daily = snap.get("dailyBar") or {}
-    prev = snap.get("prevDailyBar") or {}
-    minute = snap.get("minuteBar") or {}
-    price = (snap.get("latestTrade") or {}).get("p") or daily.get("c")
-    prev_close = prev.get("c")
-    if not price or not prev_close or not (MOM_MIN_PRICE <= price <= MOM_MAX_PRICE):
-        return None
-    change = (price - prev_close) / prev_close * 100
-    vol = daily.get("v", 0)
-    if change < MOM_MIN_CHANGE or change > MOM_MAX_CHANGE or vol < MOM_MIN_VOLUME:
-        return None
-    prev_vol = prev.get("v") or 0
-    rvol = vol / (prev_vol * frac) if prev_vol else 99.0
-    if rvol < MOM_MIN_RVOL:
-        return None
-    high = daily.get("h") or price
-    from_high = (high - price) / high * 100 if high else 0
-    if from_high > MOM_NEAR_HIGH_PCT:
-        return None
-    sweeps = []
-    if MOM_REQUIRE_SWEEP:
-        sweeps = _mom_sweeps(sym, price, daily.get("l") or price, prev.get("l"))
-        if not sweeps:
-            return None
-    level = int(change // 10) * 10        # تنبيه مرة لكل مستوى: 10% ثم 20% ثم 30%...
-    previous = _mom_levels.get(sym, 0)
-    if previous >= level:
-        return None
-    _mom_levels[sym] = level
-    first = "🆕 أول تنبيه اليوم" if previous == 0 else f"🔼 كسر مستوى +{level}%"
-    return (f"🚀 زخم - ${sym}\n{first}\n\n"
-            f"السعر: {price:.2f}$\n"
-            f"التغير: +{change:.1f}%\n"
-            f"قمة اليوم: {high:.2f}$ (يبعد {from_high:.1f}%)\n"
-            f"الفوليوم: {vol:,.0f}\n"
-            f"الفوليوم النسبي: {rvol:.1f}x\n"
-            f"فوليوم آخر دقيقة: {minute.get('v', 0):,.0f}\n"
-            + (f"🧲 سحب سيولة: {' + '.join(sweeps)}\n" if sweeps else "")
-            + f"الوقت: {datetime.now(ZoneInfo(LOCAL_TZ)):%H:%M} (توقيتك)")
-
-
-def mom_run_forever():
-    global _mom_day
-    if not (ALPACA_KEY and ALPACA_SECRET):
-        log("الزخم: مفاتيح Alpaca ناقصة، ما اشتغل")
-        return
-    log("الزخم: بدأ")
-    while True:
-        try:
-            now_ny = datetime.now(ZoneInfo(NY))
-            if _mom_day != now_ny.date():
-                _mom_day = now_ny.date()
-                _mom_levels.clear()
-                _mom_pwl.clear()
-            if now_ny.weekday() < 5 and (9, 30) <= (now_ny.hour, now_ny.minute) < (16, 0):
-                start = now_ny.replace(hour=9, minute=30, second=0, microsecond=0)
-                frac = min(max((now_ny - start).total_seconds() / 60 / 390, 0.03), 1.0)
-                snaps = _mom_snapshots(_mom_candidates())
-                hits = 0
-                for sym, snap in snaps.items():
-                    msg = mom_check(sym, snap, frac)
-                    if msg:
-                        send_telegram(msg, sym=sym)
-                        hits += 1
-                        time.sleep(0.5)
-                if hits:
-                    log(f"[{datetime.now():%H:%M}] الزخم: {hits} تنبيه من {len(snaps)} سهم")
-        except Exception as e:
-            log(f"الزخم: خطأ {e}")
-        time.sleep(MOM_EVERY_SEC)
 
 
 # ================== (1ك-2) سحب سيولة دعم ومقاومة الأسبوع السابق - فريم 4 ساعات ==================
@@ -1617,6 +1356,71 @@ def check_pwh_1h(c1h, resistance, week_start, wick_only=False):
             "first_touch": bool(before.empty or before["High"].max() <= resistance)}
 
 
+def confirm_sweep(c, lvl, start, side, wick_only=False):
+    """تأكيد سحب السيولة (SWEEP_CONFIRM): التنبيه ما يطلع على شمعة السحب نفسها، يطلع على شمعة التأكيد بعدها.
+    الدعم (low): شمعة سحب ذيلها بس تحت الدعم (الافتتاح والإغلاق فوقه)، وبعدها شمعة:
+        - تقفل فوق قمة شمعة السحب، أو
+        - ترجع تختبر الدعم (توصل له أو قريب منه بـ SWEEP_RETEST_PCT) وما تكسر قاع شمعة السحب
+    المقاومة (high): شمعة سحب ذيلها فوق المقاومة وإغلاقها تحتها، وبعدها شمعة ترجع تختبر المقاومة
+        وما تكسر قمة شمعة السحب ولا تقفل فوق المقاومة
+    يلغي النموذج: (دعم) شمعة تكسر قاع شمعة السحب أو تقفل تحت الدعم | (مقاومة) شمعة تكسر قمة شمعة السحب أو تقفل فوق المقاومة
+    التنبيه بس لو آخر شمعة مقفلة هي أول شمعة تأكيد. يرجع نفس بيانات شمعة السحب + بيانات التأكيد، أو None."""
+    c = c[c.index >= start]
+    n = len(c)
+    if n < 2:
+        return None
+    tol = lvl * SWEEP_RETEST_PCT / 100
+    fn = check_pwl_1h if side == "low" else check_pwh_1h
+    wo = True if side == "low" else wick_only          # الدعم: الذيل بس تحت الدعم
+    for si in range(n - 2, -1, -1):                    # آخر شمعة سحب قبل آخر شمعة
+        r = fn(c.iloc[:si + 1], lvl, start, wick_only=wo)
+        if not r:
+            continue
+        s_hi, s_lo = r["high"], r["low"]
+        for j in range(si + 1, n):
+            k = c.iloc[j]
+            kh, kl, kc = float(k["High"]), float(k["Low"]), float(k["Close"])
+            how = None
+            if side == "low":
+                if kl < s_lo or kc < lvl:
+                    return None                         # كسر قاع شمعة السحب أو قفل تحت الدعم
+                if kc > s_hi:
+                    how = f"شمعة قفلت فوق قمة شمعة السحب ({kc:.2f} > {s_hi:.2f})"
+                elif kl <= lvl + tol:
+                    how = (f"إعادة اختبار الدعم: نزلت لـ {kl:.2f} وما كسرت قاع شمعة السحب {s_lo:.2f}"
+                           f" وقفلت فوق الدعم ({kc:.2f})")
+            else:
+                if kh > s_hi or kc > lvl:
+                    return None                         # كسر قمة شمعة السحب أو قفل فوق المقاومة
+                if kh >= lvl - tol:
+                    how = (f"إعادة اختبار المقاومة: طلعت لـ {kh:.2f} وما كسرت قمة شمعة السحب {s_hi:.2f}"
+                           f" وقفلت تحت المقاومة ({kc:.2f})")
+            if how:
+                if j != n - 1:
+                    return None                         # التأكيد صار قبل (انرسل أو فات وقته)
+                r = dict(r)
+                r.update({"sweep_start": r["start"], "start": c.index[j], "end": k["end"],
+                          "confirm_close": kc, "confirm_txt": "✅ التأكيد: " + how})
+                return r
+        return None
+    return None
+
+
+def sweep_check(side, wick_only=False):
+    """الدالة اللي تفحص السحب لكل جهة: مع التأكيد (SWEEP_CONFIRM) أو شمعة السحب لحالها مثل قبل."""
+    if SWEEP_CONFIRM:
+        return lambda c, lvl, start, wick_only=wick_only: confirm_sweep(c, lvl, start, side, wick_only)
+    return check_pwl_1h if side == "low" else check_pwh_1h
+
+
+def _sweep_time_line(r):
+    """سطر وقت شمعة السحب لما التنبيه على شمعة التأكيد."""
+    if r.get("sweep_start") is None:
+        return ""
+    t0 = pd.Timestamp(r["sweep_start"]).tz_convert(LOCAL_TZ)
+    return f"\n{r['confirm_txt']}\nشمعة السحب: {t0:%Y-%m-%d %H:%M} (توقيتك)"
+
+
 def _pwl_message(t, side, lvl, lvl_day, r, frame="فريم ساعة", trade=False):
     t1 = pd.Timestamp(r["start"]).tz_convert(LOCAL_TZ)
     color = "خضراء 🟢" if r["close"] > r["open"] else "حمراء 🔴"
@@ -1644,8 +1448,9 @@ def _pwl_message(t, side, lvl, lvl_day, r, frame="فريم ساعة", trade=Fals
             trade_lines = (f"\n📉 الاتجاه المتوقع: بوت (هبوط)"
                            f"\n🛑 الوقف: المقاومة {lvl:.2f}")
     return (f"{head}\nالسهم: ${t}\n{lvl_line}\n{wick}\n{close}\n{note}"
-            f"{trade_lines}\n"
-            f"وقت الشمعة: {t1:%Y-%m-%d %H:%M} (توقيتك)")
+            f"{trade_lines}{_sweep_time_line(r)}\n"
+            f"{'وقت شمعة التأكيد' if r.get('sweep_start') is not None else 'وقت الشمعة'}: "
+            f"{t1:%Y-%m-%d %H:%M} (توقيتك)")
 
 
 def scan_pwl_4h(symbols, sent):
@@ -1654,9 +1459,9 @@ def scan_pwl_4h(symbols, sent):
     wk0 = _week_start(now)
     checks4h = []
     if ENABLE_PWL_4H or (ENABLE_WKOPT and not WKOPT_PUT_ONLY):
-        checks4h.append(("low", "pwl4h", check_pwl_1h, ENABLE_PWL_4H))
+        checks4h.append(("low", "pwl4h", sweep_check("low", PW4H_WICK_ONLY), ENABLE_PWL_4H))
     if ENABLE_PWH_4H or ENABLE_WKOPT:
-        checks4h.append(("high", "pwh4h", check_pwh_1h, ENABLE_PWH_4H))
+        checks4h.append(("high", "pwh4h", sweep_check("high", PW4H_WICK_ONLY), ENABLE_PWH_4H))
     if not checks4h and not ENABLE_PD4H:
         return
     hits = 0
@@ -1792,8 +1597,9 @@ def _pd4h_message(t, side, lvl, r, pd_lv, pw_lv):
             levels.append(f"دعم الأسبوع السابق ({pwld:%m-%d}): {pwl:.2f} ({dist(pwl)})")
     return (f"{head}\nالسهم: ${t}\n"
             f"{'الدعم (قاع' if side == 'low' else 'المقاومة (قمة'} اليوم السابق): {lvl:.2f}\n"
-            f"{wick}\n{close}\n{note}\n"
-            f"الشمعة: {t1:%H:%M} - {t2:%H:%M} (توقيتك)\n\n"
+            f"{wick}\n{close}\n{note}{_sweep_time_line(r)}\n"
+            f"{'شمعة التأكيد' if r.get('sweep_start') is not None else 'الشمعة'}: "
+            f"{t1:%H:%M} - {t2:%H:%M} (توقيتك)\n\n"
             + "\n".join(levels) + f"\n\n{trade}")
 
 
@@ -1806,7 +1612,7 @@ def pd4h_check(t, df, now, sent):
     pw_lv = prev_week_ext_levels(df, _week_start(now))
     c4h = only_closed(to_frame(df, 240, overnight=False), df.index.max(), now)
     hits = 0
-    for side, fn in (("low", check_pwl_1h), ("high", check_pwh_1h)):
+    for side, fn in (("low", sweep_check("low", PD4H_WICK_ONLY)), ("high", sweep_check("high", PD4H_WICK_ONLY))):
         lvl = pd_lv[side][0]
         r = fn(c4h, lvl, day0, wick_only=PD4H_WICK_ONLY)       # شموع اليوم بس
         if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
@@ -2374,7 +2180,8 @@ def pw4h_now(symbols, send=False):
             c4h = c4h[(c4h.index >= wk0) & (c4h.index < wk0 + pd.Timedelta(days=7))]
             for i in range(len(c4h)):
                 part = c4h.iloc[:i + 1]
-                for side, fn in (("low", check_pwl_1h), ("high", check_pwh_1h)):
+                for side in ("low", "high"):
+                    fn = sweep_check(side, PW4H_WICK_ONLY)
                     lvl, lvl_day = lv4[side]
                     r = fn(part, lvl, wk0, wick_only=PW4H_WICK_ONLY)
                     if r:
@@ -2512,7 +2319,7 @@ def _pdr1h_option_rows(t, put, spot, d1, d2):
                 if token:
                     p["page_token"] = token
                 _alpaca_wait()
-                js = _mom_get(f"/v1beta1/options/snapshots/{t}", p)
+                js = _alpaca_data_get(f"/v1beta1/options/snapshots/{t}", p)
                 for sym, sn in (js.get("snapshots") or {}).items():
                     m = re.match(r"^(.+?)(\d{6})([CP])(\d{8})$", sym)
                     if not m:
@@ -3738,250 +3545,10 @@ def algo_self_test():
     print(_big_message("BIGCAP", big[0], 45_600_000_000))
 
 
-# ================== (7) الأخبار الإيجابية - ألباكا ==================
-import re
-
-NEWS_URL = "https://data.alpaca.markets/v1beta1/news"
-SNAP_URL = "https://data.alpaca.markets/v2/stocks/snapshots"
-
-# (الاسم، الكلمات) - أول تصنيف ينطبق على العنوان هو اللي يطلع بالتنبيه
-NEWS_POSITIVE = [
-    ("🤝 اندماج / استحواذ", r"\bmerger\b|\bmerge\b|\bto merge\b|\bacquir|\bacquisition\b|\bbuyout\b|"
-                            r"\btakeover\b|\bdefinitive agreement\b|\btender offer\b|\bgo(ing)? private\b|"
-                            r"\bto be acquired\b|\bbusiness combination\b"),
-    ("💊 موافقة FDA", r"\bfda\b.*\b(approv|clear|grant)|\bapproval\b|\bapproved\b|\bclearance\b|"
-                     r"\bbreakthrough therapy\b|\bfast track\b|\borphan drug\b|\bpriority review\b"),
-    ("🧪 نتائج دراسة إيجابية", r"\bpositive (topline|results|data|phase)|\bmet (its |the )?primary endpoint|"
-                              r"\bstatistically significant\b"),
-    ("📝 عقد / شراكة", r"\bcontract\b|\bawarded\b|\bwins\b.*\b(order|deal|contract)|\bpartnership\b|"
-                      r"\bpartners with\b|\bcollaboration\b|\bstrategic alliance\b|\bselected by\b|"
-                      r"\bpurchase order\b|\blicens(e|ing) agreement\b|\bsupply agreement\b"),
-    ("📈 نتائج / توقعات قوية", r"\bbeats?\b|\btops?\b.*\bestimates\b|\brecord (revenue|quarter|sales|results)|"
-                              r"\braises?\b.*\b(guidance|outlook|forecast)|\bboosts?\b.*\b(guidance|outlook)|"
-                              r"\bexceeds?\b.*\b(expectations|estimates)"),
-    ("⬆️ ترقية محلل", r"\bupgrades?\b|\bupgraded\b|\braises?\b.*\bprice target\b|\binitiates?\b.*\b(buy|outperform|overweight)"),
-    ("💵 إعادة شراء / توزيعات", r"\bbuyback\b|\b(share|stock) repurchase\b|\bspecial dividend\b|"
-                               r"\b(raises|increases|boosts) (quarterly )?dividend\b"),
-]
-# لو العنوان فيه أي وحدة من هذي، يتجاهل الخبر حتى لو فيه كلمة إيجابية
-NEWS_NEGATIVE = (r"\boffering\b|\bdilut|\bpriced\b|\bregistered direct\b|\bprivate placement\b|\bwarrants?\b|"
-                 r"\breverse (stock )?split\b|\blawsuit\b|\bclass action\b|\binvestigat|\bshareholder alert\b|"
-                 r"\blaw firm\b|\bfair to\b|\bdowngrad|\bmiss(es|ed)?\b|\b(cuts|lowers|slashes|withdraws)\b|"
-                 r"\bbankrupt|\bchapter 11\b|\bdelist|\bterminat|\bhalt|\bwarning\b|\bfalls?\b|\bplunge|"
-                 r"\bslump|\btumble|\bsinks?\b|\bshort (seller|report)\b|\bsec charges\b|\brecall\b|"
-                 r"\bcomplete response letter\b|\bcrl\b|\brejects?\b|\bdenied\b|\bfails?\b|\bdelay")
-_NEWS_POS = [(name, re.compile(rx, re.I)) for name, rx in NEWS_POSITIVE]
-_NEWS_NEG = re.compile(NEWS_NEGATIVE, re.I)
-
-
-def classify_news(headline):
-    """يرجع اسم التصنيف لو الخبر إيجابي، وإلا None."""
-    h = headline or ""
-    if _NEWS_NEG.search(h):
-        return None
-    for name, rx in _NEWS_POS:
-        if rx.search(h):
-            return name
-    return None
-
-
-def _alpaca_headers():
-    return {"APCA-API-KEY-ID": ALPACA_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET}
-
-
-def fetch_news(start):
-    """كل الأخبار من وقت start لين الحين (كل الأسهم). يرجع قائمة أو None لو فشل."""
-    params = {"start": start.strftime("%Y-%m-%dT%H:%M:%SZ"), "limit": 50, "sort": "asc",
-              "include_content": "false"}
-    out = []
-    for _ in range(10):
-        _alpaca_wait()
-        try:
-            r = requests.get(NEWS_URL, headers=_alpaca_headers(), params=params, timeout=20)
-        except Exception as e:
-            log("الأخبار: فشل الاتصال -", e)
-            return None
-        if r.status_code == 429:
-            time.sleep(10)
-            continue
-        if r.status_code != 200:
-            log(f"الأخبار: خطأ {r.status_code} - {r.text[:200]}")
-            return None
-        data = r.json()
-        out.extend(data.get("news") or [])
-        token = data.get("next_page_token")
-        if not token:
-            break
-        params["page_token"] = token
-    return out
-
-
-def fetch_prices(symbols):
-    """آخر سعر لكل سهم من ألباكا: {الرمز: السعر}."""
-    if not symbols:
-        return {}
-    _alpaca_wait()
-    try:
-        r = requests.get(SNAP_URL, headers=_alpaca_headers(),
-                         params={"symbols": ",".join(symbols), "feed": ALGO_FEED}, timeout=15)
-        if r.status_code != 200:
-            return {}
-        out = {}
-        for sym, snap in (r.json() or {}).items():
-            snap = snap or {}
-            px = ((snap.get("latestTrade") or {}).get("p")
-                  or (snap.get("dailyBar") or {}).get("c"))
-            if px:
-                out[sym] = float(px)
-        return out
-    except Exception:
-        return {}
-
-
-_news_caps = {"day": None, "caps": {}}
-
-
-def news_caps():
-    """{الرمز: القيمة السوقية} للأسهم اللي قيمتها تحت NEWS_MAX_MARKET_CAP. تتجدد مرة باليوم."""
-    today = pd.Timestamp.now(tz=NY).date()
-    if _news_caps["day"] == today and _news_caps["caps"]:
-        return _news_caps["caps"]
-    caps = {}
-    for ex in NEWS_EXCHANGES:
-        url = ("https://api.nasdaq.com/api/screener/stocks"
-               f"?tableonly=true&limit=10000&exchange={ex}&download=true")
-        try:
-            r = requests.get(url, headers={**HEADERS, "Accept": "application/json"}, timeout=30)
-            data = r.json().get("data") or {}
-            rows = data.get("rows") or (data.get("table") or {}).get("rows") or []
-            for row in rows:
-                sym = str(row.get("symbol", "")).strip().upper()
-                cap = _to_number(row.get("marketCap"))
-                if sym.isalpha() and len(sym) <= 5 and max(0, NEWS_MIN_MARKET_CAP) < cap < NEWS_MAX_MARKET_CAP:
-                    caps[sym] = cap
-        except Exception as e:
-            log(f"الأخبار: ما قدرت أجيب القيم السوقية من {ex.upper()} -", e)
-    if caps:
-        _news_caps.update(day=today, caps=caps)
-        log(f"الأخبار: {len(caps)} سهم قيمتها السوقية أقل من {NEWS_MAX_MARKET_CAP / 1e6:g} مليون")
-    return caps
-
-
-def _news_message(item, cat, syms, prices, caps=None):
-    t = pd.Timestamp(item.get("created_at")).tz_convert(LOCAL_TZ)
-    lines = []
-    for s in syms:
-        px = prices.get(s)
-        lines.append((f"${s} ({px:.2f}$)" if px else f"${s}") + sec_tag(s, " - "))
-    return (f"📰 خبر إيجابي — {cat}\n"
-            f"السهم: {' | '.join(lines)}\n"
-            + (f"القيمة السوقية: {' | '.join(_cap_txt(caps[s]) for s in syms if s in caps)}\n"
-               if caps and any(s in caps for s in syms) else "")
-            + f"العنوان: {item.get('headline', '').strip()}\n"
-            f"المصدر: {item.get('source') or item.get('author') or 'غير معروف'}\n"
-            f"الوقت: {t:%H:%M} (توقيتك)\n"
-            + (f"الرابط: {item['url']}" if item.get("url") else ""))
-
-
-def news_loop():
-    """يشتغل بخيط لحاله: يسحب الأخبار كل NEWS_POLL_SEC ثانية ويرسل الإيجابي بس."""
-    sent = _load_set(NEWS_SENT_FILE)
-    last = pd.Timestamp.now(tz="UTC") - pd.Timedelta(minutes=NEWS_MAX_AGE_MIN)
-    log("الأخبار: بدأ المراقبة (ألباكا) - "
-        + (f"أسهم سعرها {NEWS_MIN_PRICE or 0:g}$-{NEWS_MAX_PRICE:g}$" if NEWS_MAX_PRICE else "كل الأسعار")
-        + (f" وقيمتها أقل من {NEWS_MAX_MARKET_CAP / 1e6:g} مليون$" if NEWS_MAX_MARKET_CAP else ""))
-    while True:
-        try:
-            now = pd.Timestamp.now(tz="UTC")
-            items = fetch_news(last - pd.Timedelta(minutes=2))   # نرجع شوي عشان الأخبار المتأخرة
-            if items is not None:
-                last = now
-                hits = []
-                for it in items:
-                    key = str(it.get("id"))
-                    if key in sent:
-                        continue
-                    created = pd.Timestamp(it.get("created_at"))
-                    if (now - created).total_seconds() / 60 > NEWS_MAX_AGE_MIN:
-                        continue
-                    syms = [s for s in (it.get("symbols") or []) if s.isalpha() and len(s) <= 5]
-                    if not syms or len(syms) > NEWS_MAX_SYMBOLS:
-                        continue
-                    cat = classify_news(it.get("headline"))
-                    if not cat:
-                        continue
-                    if ONE_LIST:
-                        syms = [x for x in syms if x in WATCH_SYMBOLS]
-                        if not syms:
-                            continue
-                    elif NEWS_MAX_MARKET_CAP:
-                        caps = news_caps()
-                        if not caps:
-                            continue            # ما قدر يجيب القيم السوقية، ما يرسل بدون فلتر
-                        syms = [x for x in syms if x in caps]
-                        if not syms:
-                            continue
-                    sent.add(key)
-                    _append_line(NEWS_SENT_FILE, key)
-                    hits.append((it, cat, syms))
-                prices = fetch_prices(sorted({s for _, _, ss in hits for s in ss})) if hits else {}
-                for it, cat, syms in hits:
-                    if not ONE_LIST and (NEWS_MIN_PRICE or NEWS_MAX_PRICE):
-                        ok = [s for s in syms if s in prices
-                              and prices[s] >= NEWS_MIN_PRICE
-                              and (not NEWS_MAX_PRICE or prices[s] <= NEWS_MAX_PRICE)]
-                        if not ok:
-                            continue
-                        syms = ok
-                    send_telegram(_news_message(it, cat, syms, prices, _news_caps["caps"]), kind="news")
-        except Exception as e:
-            log("الأخبار: خطأ -", e)
-        time.sleep(NEWS_POLL_SEC)
-
-
-def start_news_thread():
-    if not NEWS:
-        log("الأخبار: مطفي (NEWS=0)")
-        return
-    if not (ALPACA_KEY and ALPACA_SECRET):
-        log("الأخبار: مطفي (يحتاج ALPACAAPIKEY و ALPACASECRETKEY في Railway)")
-        return
-    threading.Thread(target=news_loop, daemon=True, name="news").start()
-
-
-def news_self_test():
-    cases = [
-        ("Acme Corp To Acquire Beta Inc For $2.1B In Cash", True),
-        ("XYZ Announces Definitive Merger Agreement With ABC", True),
-        ("BioCo Receives FDA Approval For Lead Drug", True),
-        ("BioCo Announces Positive Topline Results From Phase 3 Trial", True),
-        ("TechCo Awarded $50M Contract By US Army", True),
-        ("RetailCo Q3 EPS Beats Estimates, Raises FY Guidance", True),
-        ("Morgan Stanley Upgrades NVDA To Overweight", True),
-        ("SmallCap Announces $10M Registered Direct Offering", False),
-        ("Halper Sadeh Investigating Whether Sale Of XYZ Is Fair To Shareholders", False),
-        ("BioCo Receives Complete Response Letter From FDA", False),
-        ("RetailCo Misses Estimates, Cuts Guidance", False),
-        ("Acme Terminates Merger Agreement With Beta", False),
-        ("Analyst Downgrades AAPL To Neutral", False),
-        ("Stocks Moving In Thursday's Pre-Market Session", False),
-    ]
-    bad = [(h, want) for h, want in cases if bool(classify_news(h)) != want]
-    for h, want in cases:
-        print(("✅" if (h, want) not in bad else "❌"), classify_news(h) or "-", "|", h)
-    assert not bad, bad
-    print("NEWS TEST OK")
-    print(_news_message({"headline": cases[0][0], "source": "benzinga",
-                         "created_at": "2026-10-02T13:05:00Z", "url": "https://example.com"},
-                        classify_news(cases[0][0]), ["ACME"], {"ACME": 4.12}, {"ACME": 62_500_000}))
-
 
 def main():
     if "--algotest" in sys.argv:
         algo_self_test()
-        return
-    if "--newstest" in sys.argv:
-        news_self_test()
         return
     if "--pwltest" in sys.argv:
         pwl_self_test()
@@ -4023,30 +3590,26 @@ def main():
             fr = [n for on, n in ((WATCH_IFVG_1H, "ساعة"), (WATCH_IFVG_4H, "4 ساعات")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG قائمة المراقبة فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
-                      "الأقسام: " + ("نزول الشورت المتاح 90% + " if ENABLE_BORROW_DROP else "") + "الأخبار + الزخم + خوارزميات التقطيع + خوارزميات البني ستوك"
+                      "الأقسام: " + ("نزول الشورت المتاح 90% + " if ENABLE_BORROW_DROP else "") + "خوارزميات التقطيع"
+                      + (" + خوارزميات البني ستوك" if ALGO_PENNY else "")
                       + (" + خوارزميات الأسهم الكبيرة" if ALGO_BIG else "")
-                      + (" + الآيس بيرغ" if ALGO_BIG and ALGO_ICE else "") + (" + ماسح السيولة" if ENABLE_FLOW else "")
+                      + (" + الآيس بيرغ" if ALGO_BIG and ALGO_ICE else "")
                       + (" + سحب الجمعة/الاثنين (كول)" if ENABLE_FRIMON else "") + " + التجزئة العكسية"
                       f"{pw4h_txt}\n"
                       f"الوقت: {pd.Timestamp.now(tz=LOCAL_TZ):%Y-%m-%d %H:%M} (توقيتك)")
     if not once:
         pd4h_send_test_once()
         start_algo_thread()
-        start_news_thread()
         if ENABLE_FRIMON:        # (11) سحب قمة الجمعة/الاثنين + دعم الأسبوع السابق → كول
             threading.Thread(target=frimon_run_forever, daemon=True, name="frimon").start()
         if ENABLE_BORROW_DROP:   # نزول الشورت المتاح أكثر من 90%
             threading.Thread(target=bz_run_forever, daemon=True, name="borrow_drop").start()
-        if ENABLE_MOMENTUM:      # سكنر الزخم
-            threading.Thread(target=mom_run_forever, daemon=True, name="momentum").start()
 
     pwl_last = 0.0
     ifvg_last = None
     watch_last = None
     was_open = None
     gap_sent = _load_set(GAP_SENT_FILE)       # مفاتيح تنبيهات سحب الأسبوع السابق (4 ساعات)
-    flow_tickers, flow_day, flow_last = [], None, 0.0
-    flow_sent = _load_set(FLOW_SENT_FILE)
     rsplit_new_sent = _load_set(RSPLIT_NEW_FILE)
     rsplit_state = _rsplit_state()
 
@@ -4080,17 +3643,6 @@ def main():
                     scan_watch_ifvg(list(WATCH_SYMBOLS), gap_sent, now_ny,
                                     do_1h=once or day, do_4h=once or do_4h)
                 watch_last = slot or now_ny
-
-        # (2) ماسح السيولة - وقت السوق الرسمي، كل 5 دقايق
-        if ENABLE_FLOW and (regular_session_open() or once) \
-                and time.time() - flow_last >= FLOW_EVERY_MIN * 60:
-            today = pd.Timestamp.now(tz=NY).date()
-            if flow_day != today or not flow_tickers:
-                flow_tickers = build_universe("ماسح السيولة", FLOW_MIN_PRICE, FLOW_MAX_PRICE,
-                                              FLOW_MIN_AVG_VOLUME, include_nyse=False)
-                flow_day = today
-            scan_flow(flow_tickers, flow_sent)
-            flow_last = time.time()
 
         # (4ب) التجزئة العكسية - الجديد كل يوم، وقائمة كل جمعة
         if ENABLE_RSPLIT_SHORT:

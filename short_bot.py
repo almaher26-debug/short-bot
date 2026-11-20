@@ -6,8 +6,8 @@
 =====================================================
 
 (1هـ) الإنفيرجن IFVG - قائمة المراقبة (منقول من gap_scanner) - شغال
-    - فريم ساعة: الجلسة الممتدة (4 الفجر - 8 بالليل نيويورك)، الجاب 16 سنت وفوق
-    - فريم 4 ساعات: 24 ساعة (الليل من ألباكا)، الجاب 10 سنت وفوق | الرسالة بدون الشموع
+    - فريم ساعة: الجلسة الممتدة (4 الفجر - 8 بالليل نيويورك) + 24 ساعة (الليل من ألباكا)، الجاب 16 سنت وفوق
+    - فريم 4 ساعات: 24 ساعة (الليل من ألباكا) + الممددة، الجاب 10 سنت وفوق | الرسالة فيها الشموع الأربع
     - تمركز القاما تحت التنبيه (IFVG_GAMMA = False يشيله)
     - ENABLE_WATCH_IFVG = False يطفيه (أو WATCH_IFVG_1H / WATCH_IFVG_4H لكل فريم)
 
@@ -72,6 +72,11 @@
     - العقد: أكثر من 10 أيام، حجم تداول فوق 500، عقود مفتوحة فوق 1000، دلتا فوق 0.1200 + قاما العقد
     - لو ما لقى عقد بالشروط ينبه بدونه | المؤشرات (سباكس) تنبيه بدون عقد | ENABLE_WKOPT = False يطفيه
 
+(15) سحب دعم ومقاومة اليوم السابق - فريم ساعة (الجلسة الممددة) - أسهم القسم (13)
+    - 🔴 مقاومة: ذيل شمعة الساعة فوق قمة اليوم السابق والإغلاق تحتها، والسهم هابط (تحت إغلاق أمس)
+    - 🟢 دعم: ذيل شمعة الساعة تحت قاع اليوم السابق والإغلاق فوقه، والسهم صاعد (فوق إغلاق أمس)
+    - تنبيه واحد باليوم لكل سهم لكل جهة | ENABLE_PDH1H / ENABLE_PDL1H = False يطفي المقاومة / الدعم
+
 (14) اتجاه السوق المتوقع - ناسداك مقابل سباكس على قمة وقاع اليوم السابق (فريم 15 دقيقة)
     - 🔴 هابط: ناسداك سحب قمة اليوم السابق وقفل تحتها، وسباكس ما سحب قمته
     - 🟢 صاعد: ناسداك سحب قاع اليوم السابق وقفل فوقه، وسباكس ما سحب قاعه
@@ -87,6 +92,7 @@
   python short_bot.py --frimontest  # يجرب سحب الجمعة/الاثنين (بدون نت)
   python short_bot.py --wkopttest   # يجرب اختيار العقد للسحب الأسبوعي (بدون نت)
   python short_bot.py --ifvgtest    # يجرب الإنفيرجن (بدون نت)
+  python short_bot.py --pdh1htest   # يجرب سحب مقاومة اليوم السابق فريم ساعة (بدون نت)
   python short_bot.py --smttest     # يجرب اتجاه السوق ناسداك/سباكس (بدون نت)
 """
 
@@ -134,16 +140,13 @@ GAP_OVERNIGHT = bool(TIINGO_TOKEN)   # يتفعل لحاله لو حطيت ال�
 # ⭐ قائمتك الموحدة (قائمة المراقبة) - عليها سحب الأسبوع السابق 4 ساعات وسحب الجمعة/الاثنين
 TEST_ON_START = True             # True = يرسل رسالة اختبار كل ما البوت يشتغل | False = بدون
 ONE_LIST = False  # True = كل الأقسام على القائمة هذي | False = كل قسم يرجع لأسهمه القديمة
-WATCH_SYMBOLS = [   # قائمتك (15 نوفمبر 2026) - 78 سهم + QQQ + SPY + GLD
+WATCH_SYMBOLS = [   # قائمتك (20 نوفمبر 2026) - 58 سهم + QQQ + SPY + GLD
     "NVDA", "CRM", "AVGO", "META", "TSLA", "SPCX", "AMD", "LITE", "AAPL", "RKLB",
-    "UNH", "MU", "LLY", "ADBE", "QCOM", "SHOP", "GOOGL", "MSFT", "MSTR", "AMZN",
-    "DDOG", "ACN", "GEV", "LRCX", "PLTR", "OKTA", "ORCL", "INTC", "AAOI", "CRDO",
-    "SNDK", "STX", "CRCL", "WDC", "SKHY", "NBIS", "CRWV", "CRWD", "MRVL", "ARM",
-    "AMAT", "PANW", "SNOW", "NOW", "DELL", "ENPH", "KLAC", "MCHP",
-    "FTNT", "ADSK", "MDB", "CSCO", "CLS", "BE", "MOD", "TEM", "CELH", "CHWY",
-    "CROX", "GRMN", "CTSH", "CTAS", "SMH", "ABBV",
-    "HAS", "KO", "LULU", "APH", "SNPS", "IBM", "HD", "MRNA", "SMCI",
-    "TEAM", "IREN", "RIOT", "TGT", "JNJ",
+    "UNH", "MU", "LLY", "ADBE", "QCOM", "SHOP", "GOOGL", "GOOG", "MSFT", "MSTR",
+    "AMZN", "DDOG", "ACN", "GEV", "LRCX", "PLTR", "OKTA", "ORCL", "INTC", "CRDO",
+    "SNDK", "STX", "CRCL", "WDC", "SKHY", "CRWV", "CRWD", "MRVL", "ARM", "PANW",
+    "SNOW", "NOW", "DELL", "ABBV", "HAS", "KO", "LULU", "APH", "SNPS", "IBM",
+    "HD", "MRNA", "SMCI", "TEAM", "IREN", "RIOT", "TGT", "JNJ",
     # صناديق
     "QQQ", "SPY", "GLD",
 ]
@@ -217,6 +220,13 @@ PD4H_SYMBOLS = ["TSLA", "MSFT", "AAPL", "AMD", "META", "NVDA", "GOOGL", "AMZN", 
 PD4H_CHECK_LINE = "🔎 حلل السهم بنفسك وحدد الاتجاه"
 PD4H_WICK_ONLY = False # False = الإغلاق بس يرجع فوق الدعم / تحت المقاومة | True = لازم الافتتاح بعد بجهة المستوى
 
+# ---- (15) سحب دعم ومقاومة اليوم السابق - فريم ساعة (مقاومة + هابط / دعم + صاعد) ----
+#   شمعة ساعة (من اليوم) ذيلها طلع فوق قمة اليوم السابق وقفلت تحتها، والسهم هابط (الإغلاق تحت إغلاق أمس)
+#   الجلسة الممددة (4 الفجر - 8 بالليل نيويورك) بدون الليلي | قمة اليوم السابق من بري + ماركت + أفتر
+#   الأسهم: أسهم القسم (13) PD4H_SYMBOLS | تنبيه واحد باليوم لكل سهم | ينبه على شمعة السحب نفسها
+ENABLE_PDH1H = True              # المقاومة (هابط): True = شغال | False = مطفي
+ENABLE_PDL1H = True              # الدعم (صاعد): ذيل تحت قاع اليوم السابق وإغلاق فوقه، والسهم فوق إغلاق أمس
+
 # ---- (14) اتجاه السوق المتوقع: ناسداك مقابل سباكس على قمة وقاع اليوم السابق ----
 #   🔴 هابط: ناسداك سحب قمة اليوم السابق (ذيل فوقها) وقفلت الشمعة تحتها، وسباكس ما وصل قمة يومه السابق
 #   🟢 صاعد: ناسداك سحب قاع اليوم السابق (ذيل تحته) وقفلت الشمعة فوقه، وسباكس ما وصل قاع يومه السابق
@@ -254,12 +264,17 @@ IFVG_SHOW_CANDLES = True         # يكتب الشموع الأربع (وقت، 
 #   فريم ساعة: الجلسة الممتدة (4 الفجر - 8 بالليل نيويورك)، الجاب 16 سنت وفوق
 #   فريم 4 ساعات: 24 ساعة نفس تريدنج فيو (الشموع تبدأ 8 بالليل: 8-12، 12-4، 4-8، 8-12، 12-4، 4-8)
 #     وبيانات الليل من ألباكا (feed=boats، نفس المفاتيح)، الجاب 10 سنت وفوق
-#   الرسالة بدون الشموع الأربع
+#   الرسالة فيها الشموع الأربع (WATCH_SHOW_CANDLES)
 ENABLE_WATCH_IFVG = True         # True = شغال | False = مطفي
-WATCH_IFVG_1H = True             # فريم ساعة
-WATCH_IFVG_4H = True             # فريم 4 ساعات
+WATCH_IFVG_1H = True             # فريم ساعة - الجلسة الممددة (4 الفجر - 8 بالليل نيويورك)
+WATCH_IFVG_1H_24H = True         # فريم ساعة - 24 ساعة (مع الليلي من ألباكا) | نفس الشمعة ما تتكرر بالاثنين
+WATCH_IFVG_4H = True             # فريم 4 ساعات - 24 ساعة (لو فيه مفاتيح ألباكا)
+WATCH_IFVG_4H_EXT = True         # فريم 4 ساعات - الجلسة الممددة (4-8، 8-12، 12-4، 4-8 نيويورك) | نفس الشمعة ما تتكرر بالاثنين
 WATCH_MIN_SIZE = 0.16            # حجم الجاب (فريم الساعة): 16 سنت وفوق | 0 = بدون شرط
 WATCH4H_MIN_SIZE = 0.10          # حجم الجاب (فريم 4 ساعات): 10 سنت وفوق
+WATCH_SHOW_CANDLES = False       # يكتب الشموع الأربع (وقت، لون، أعلى، أقل) في التنبيه - ساعة و4 ساعات | False = بدونها
+WATCH_HEAD = False               # False = بدون سطر "للمتابعة" (الرمز أول سطر) | True = يرجع
+WATCH_CHECK_LINE = "حلل بنفسك وتأكد من الاتجاه"   # سطر قبل إخلاء المسؤولية | "" = بدونه
 IFVG_GAMMA = True                # يضيف تمركز القاما لتنبيهات الإنفيرجن (القسمين) | False = بدون
 GAP_4H_24H = True               # فريم 4 ساعات: True = 24 ساعة (يحتاج مفاتيح ألباكا) | False = 4 الفجر - 8 بالليل
 
@@ -690,7 +705,8 @@ def send_telegram(text, kind=None, sym=None, photo=None, head=True):
     if ADD_EDUCATION and kind in EDUCATION:
         text += "\n\n" + EDUCATION[kind]
     if ADD_DISCLAIMER and "ليست توصية" not in text:
-        text += "\n\n" + DISCLAIMER
+        sep = "\n" if WATCH_CHECK_LINE and text.endswith(WATCH_CHECK_LINE) else "\n\n"
+        text += sep + DISCLAIMER
     log(text)
     if "ضع_" in TELEGRAM_TOKEN:
         return  # ما حطيت التوكن، يطبع بالشاشة بس
@@ -1484,7 +1500,7 @@ def scan_pwl_4h(symbols, sent):
         checks4h.append(("low", "pwl4h", sweep_check("low", PW4H_WICK_ONLY), ENABLE_PWL_4H))
     if ENABLE_PWH_4H or ENABLE_WKOPT:
         checks4h.append(("high", "pwh4h", sweep_check("high", PW4H_WICK_ONLY), ENABLE_PWH_4H))
-    if not checks4h and not ENABLE_PD4H:
+    if not checks4h and not ENABLE_PD4H and not ENABLE_PDH1H and not ENABLE_PDL1H:
         return
     hits = 0
     for t, df in download_batches(symbols, 100, period="15d", interval=f"{GAP_BASE_MIN}m",
@@ -1498,6 +1514,11 @@ def scan_pwl_4h(symbols, sent):
                     hits += pd4h_check(t, df, now, sent)
                 except Exception as e:
                     log(f"سحب اليوم السابق: {t}: خطأ - {e}")
+            if (ENABLE_PDH1H or ENABLE_PDL1H) and t in PD4H_SYMBOLS:  # (15) سحب مقاومة اليوم السابق - فريم ساعة
+                try:
+                    hits += pdh1h_check(t, df, now, sent)
+                except Exception as e:
+                    log(f"سحب مقاومة أمس (ساعة): {t}: خطأ - {e}")
             if t not in WATCH_SYMBOLS:              # سهم من قائمة (13) بس: باقي الأقسام ما تفحصه
                 continue
             # مستويات الأسبوع السابق من البري + الماركت + الأفتر (بدون الليلي)
@@ -1648,6 +1669,117 @@ def pd4h_check(t, df, now, sent):
         send_telegram(with_gamma(_pd4h_message(t, side, lvl, r, pd_lv, pw_lv), t, r["close"])
                       + "\n\n" + PD4H_CHECK_LINE, kind="sweep", sym=t)
     return hits
+
+
+# ================== (15) سحب مقاومة اليوم السابق - فريم ساعة - السهم هابط ==================
+def prev_day_close(df, day_start):
+    """إغلاق آخر يوم تداول قبل day_start (إغلاق الجلسة الرسمية 4 العصر نيويورك) أو None."""
+    pw = df[df.index < day_start].between_time("09:30", "15:59")
+    if pw.empty:
+        return None
+    return float(pw["Close"].iloc[-1])
+
+
+def _pdh1h_message(t, side, lvl, lvl_day, pdc, r):
+    t1 = pd.Timestamp(r["start"]).tz_convert(LOCAL_TZ)
+    t2 = pd.Timestamp(r["end"]).tz_convert(LOCAL_TZ)
+    chg = f"{(r['close'] / pdc - 1) * 100:+.1f}%"
+    if side == "high":
+        return (f"🔻 سحب سيولة مقاومة اليوم السابق — فريم ساعة\n"
+                f"السهم: ${t}\n"
+                f"المقاومة (قمة {lvl_day:%m-%d}): {lvl:.2f}\n"
+                f"ذيل الشمعة طلع لـ {r['high']:.2f} (+{r['depth']:.2f}%) وقفلت تحت المقاومة على {r['close']:.2f}\n"
+                f"السهم هابط: تحت إغلاق أمس {pdc:.2f} ({chg})\n"
+                f"الشمعة: {t1:%H:%M} - {t2:%H:%M} (توقيتك)\n\n"
+                f"📉 الاتجاه المتوقع: هابط\n"
+                f"❌ كسر قمة شمعة السحب {r['high']:.2f} يفشل الاتجاه")
+    return (f"💧 سحب سيولة دعم اليوم السابق — فريم ساعة\n"
+            f"السهم: ${t}\n"
+            f"الدعم (قاع {lvl_day:%m-%d}): {lvl:.2f}\n"
+            f"ذيل الشمعة نزل لـ {r['low']:.2f} (-{r['depth']:.2f}%) وقفلت فوق الدعم على {r['close']:.2f}\n"
+            f"السهم صاعد: فوق إغلاق أمس {pdc:.2f} ({chg})\n"
+            f"الشمعة: {t1:%H:%M} - {t2:%H:%M} (توقيتك)\n\n"
+            f"📈 الاتجاه المتوقع: صاعد\n"
+            f"❌ كسر قاع شمعة السحب {r['low']:.2f} يفشل الاتجاه")
+
+
+def pdh1h_check(t, df, now, sent):
+    """يفحص سهم واحد (df = شموع 15 دقيقة نيويورك) على الجهتين. يرجع عدد التنبيهات.
+    مقاومة: ذيل فوق قمة أمس وإغلاق تحتها، والإغلاق تحت إغلاق أمس (هابط).
+    دعم: ذيل تحت قاع أمس وإغلاق فوقه، والإغلاق فوق إغلاق أمس (صاعد)."""
+    day0 = now.normalize()
+    lv = prev_day_ext_levels(df, day0)
+    pdc = prev_day_close(df, day0)
+    if not lv or not pdc:
+        return 0
+    c1h = only_closed(to_frame(df, 60, overnight=False), df.index.max(), now)
+    hits = 0
+    for side, on, fn in (("high", ENABLE_PDH1H, check_pwh_1h), ("low", ENABLE_PDL1H, check_pwl_1h)):
+        if not on:
+            continue
+        lvl, lvl_day = lv[side]
+        r = fn(c1h, lvl, day0)                           # آخر شمعة: ذيل برا المستوى وإغلاق داخله
+        if not r:
+            continue
+        if (side == "high" and r["close"] >= pdc) or (side == "low" and r["close"] <= pdc):
+            continue                                     # الاتجاه مو مطابق (هابط للمقاومة / صاعد للدعم)
+        if (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
+            continue
+        key = f"{t}-pd{'h' if side == 'high' else 'l'}1h-{day0:%Y%m%d}"   # تنبيه واحد باليوم لكل سهم لكل جهة
+        if key in sent:
+            continue
+        sent.add(key)
+        _append_line(GAP_SENT_FILE, key)
+        msg = with_gamma(_pdh1h_message(t, side, lvl, lvl_day, pdc, r), t, r["close"])
+        if WATCH_CHECK_LINE:
+            msg += "\n\n" + WATCH_CHECK_LINE
+        send_telegram(msg, kind="sweep", sym=t, head=WATCH_HEAD)
+        hits += 1
+    return hits
+
+
+def pdh1h_self_test():
+    """python short_bot.py --pdh1htest — يجرب (15) بدون نت."""
+    global with_gamma, send_telegram
+    ny = ZoneInfo(NY)
+    m15 = pd.date_range("2026-11-19 04:00", "2026-11-20 11:45", freq="15min", tz=ny)
+    m15 = m15[(m15.hour >= 4) & (m15.hour < 20)]
+    df = pd.DataFrame({"Open": 283.0, "High": 283.5, "Low": 282.5, "Close": 283.0}, index=m15)
+    df.loc[pd.Timestamp("2026-11-19 11:00", tz=ny), "High"] = 284.97           # قمة أمس
+    df.loc[pd.Timestamp("2026-11-19 15:45", tz=ny), "Close"] = 284.0           # إغلاق أمس
+    df.loc[pd.Timestamp("2026-11-20 10:15", tz=ny), "High"] = 286.1            # ذيل فوق القمة
+    now = pd.Timestamp("2026-11-20 11:02", tz=ny)
+    got = []
+    saved = (with_gamma, send_telegram)
+    with_gamma = lambda m, t, s: m
+    send_telegram = lambda m, **k: got.append(m)
+    try:
+        assert pdh1h_check("GOOGL", df, now, set()) == 1, "ما نبه"
+        print("✅ ذيل 286.10 فوق قمة أمس 284.97 والإغلاق 283 تحتها وتحت إغلاق أمس 284 = تنبيه")
+        print(got[0] + "\n")
+        up = df.copy(); up.loc[pd.Timestamp("2026-11-20 10:45", tz=ny), "Close"] = 284.5
+        assert pdh1h_check("GOOGL", up, now, set()) == 0
+        print("✅ الإغلاق فوق إغلاق أمس (مو هابط) = ما فيه تنبيه")
+        br = df.copy(); br.loc[pd.Timestamp("2026-11-20 10:45", tz=ny), "Close"] = 285.5
+        assert pdh1h_check("GOOGL", br, now, set()) == 0
+        print("✅ قفل فوق المقاومة (اختراق) = ما فيه تنبيه")
+        sent = {"GOOGL-pdh1h-20261120"}
+        assert pdh1h_check("GOOGL", df, now, sent) == 0
+        print("✅ تنبيه واحد باليوم")
+        su = pd.DataFrame({"Open": 285.0, "High": 285.5, "Low": 284.5, "Close": 285.0}, index=m15)
+        su.loc[pd.Timestamp("2026-11-19 11:00", tz=ny), "Low"] = 282.0            # قاع أمس
+        su.loc[pd.Timestamp("2026-11-19 15:45", tz=ny), "Close"] = 284.0          # إغلاق أمس
+        su.loc[pd.Timestamp("2026-11-20 10:15", tz=ny), "Low"] = 281.2            # ذيل تحت القاع
+        got.clear()
+        assert pdh1h_check("GOOGL", su, now, set()) == 1, "الدعم ما نبه"
+        print("✅ دعم: ذيل 281.20 تحت قاع أمس 282 والإغلاق 285 فوقه وفوق إغلاق أمس 284 = تنبيه")
+        print(got[0] + "\n")
+        dn = su.copy(); dn.loc[pd.Timestamp("2026-11-20 10:45", tz=ny), "Close"] = 283.5
+        assert pdh1h_check("GOOGL", dn, now, set()) == 0
+        print("✅ دعم بس الإغلاق تحت إغلاق أمس (مو صاعد) = ما فيه تنبيه")
+        print("PDH1H TEST OK")
+    finally:
+        with_gamma, send_telegram = saved
 
 
 PD4H_TEST_ID = "1"   # رسالة تجريبية مرة وحدة بعد الرفع — غيّر الرقم لو تبي وحدة ثانية
@@ -2076,12 +2208,21 @@ def _watch_message(t, res, frame):
         head, side = "🟢 Inversion Gap", f"الشمعة قفلت فوق أعلى الـ IFVG ({hi})"
     else:
         head, side = "🔴 Inversion Gap", f"الشمعة قفلت تحت أسفل الـ IFVG ({lo})"
-    return (f"{head} - {frame}\n"
-            f"السهم: ${t}\n"
-            f"IFVG: {lo} ← {hi}  (حجمه {hi - lo:.2f}$)\n"
-            f"{side}\n"
-            f"سعر الإغلاق: {px}\n"
-            f"وقت الإغلاق: {closed_at:%H:%M} (توقيتك)")
+    msg = (f"{head} - {frame}\n"
+           f"السهم: ${t}\n"
+           f"IFVG: {lo} ← {hi}  (حجمه {hi - lo:.2f}$)\n"
+           f"{side}\n"
+           f"سعر الإغلاق: {px}\n"
+           f"وقت الإغلاق: {closed_at:%H:%M} (توقيتك)")
+    cs = res.get("candles")
+    if WATCH_SHOW_CANDLES and cs is not None:
+        rows = []
+        for k, (ts, r) in enumerate(cs.iterrows(), 1):
+            lt = pd.Timestamp(ts).tz_convert(LOCAL_TZ)
+            col = "🟢" if r["Close"] > r["Open"] else "🔴"
+            rows.append(f"{k}) {lt:%m/%d %H:%M} {col} أعلى {r['High']:.2f} | أقل {r['Low']:.2f}")
+        msg += "\nالشموع (بتوقيتك):\n" + "\n".join(rows)
+    return msg
 
 
 # ---------- الجلسة الليلية من ألباكا (8 بالليل - 4 الفجر نيويورك) ----------
@@ -2165,12 +2306,18 @@ def watch_4h_due(now):
     return now.hour % 4 == 0 and now.minute < 30
 
 
-def scan_watch_ifvg(symbols, sent, now=None, do_1h=True, do_4h=True):
+def scan_watch_ifvg(symbols, sent, now=None, do_1h=True, do_4h=True, do_1h24=False, do_4h_ext=False):
     """(1هـ) IFVG قائمة المراقبة: ساعة (الجلسة الممتدة) + 4 ساعات (24 ساعة مع الليل من ألباكا)."""
     now = now or pd.Timestamp.now(tz=NY)
     ov4 = night_4h()
-    frames = [(do_4h and WATCH_IFVG_4H, 240, "w4h", "فريم 4 ساعات", WATCH4H_MIN_SIZE, ov4),
-              (do_1h and WATCH_IFVG_1H, 60, "w1h", "فريم ساعة", WATCH_MIN_SIZE, False)]
+    frames = [(do_4h_ext and WATCH_IFVG_4H_EXT, 240, "w4h", "فريم 4 ساعات (ممدد)", WATCH4H_MIN_SIZE, False),
+              # نفس المفتاح "w4h": لو الممدد نبه على نفس الشمعة ما يتكرر من الـ24 ساعة
+              (do_4h and WATCH_IFVG_4H, 240, "w4h",
+               "فريم 4 ساعات (24 ساعة)" if ov4 else "فريم 4 ساعات (ممدد)", WATCH4H_MIN_SIZE, ov4),
+              (do_1h and WATCH_IFVG_1H, 60, "w1h", "فريم ساعة (ممدد)", WATCH_MIN_SIZE, False),
+              # نفس المفتاح "w1h": لو الممدد نبه على نفس الشمعة ما يتكرر من الـ24 ساعة
+              (do_1h24 and WATCH_IFVG_1H_24H and night_4h(), 60, "w1h", "فريم ساعة (24 ساعة)",
+               WATCH_MIN_SIZE, True)]
     frames = [f for f in frames if f[0]]
     if not frames:
         return
@@ -2203,7 +2350,9 @@ def scan_watch_ifvg(symbols, sent, now=None, do_1h=True, do_4h=True):
                 msg = _watch_message(t, res, label)
                 if IFVG_GAMMA:
                     msg = with_gamma(msg, t, res["price"])
-                send_telegram(msg, kind="gap", sym=t)
+                if WATCH_CHECK_LINE:
+                    msg += "\n\n" + WATCH_CHECK_LINE
+                send_telegram(msg, kind="gap", sym=t, head=WATCH_HEAD)
         except Exception as e:
             log(f"الإنفيرجن (قائمة المراقبة): {t}: خطأ - {e}")
     free_memory()
@@ -2228,8 +2377,8 @@ def watch_ifvg_self_test():
     assert r and r["side"] == "bull" and round(r["gap_top"] - r["gap_bottom"], 2) == 0.32, r
     assert round(r["gap_top"] - r["gap_bottom"], 2) >= WATCH4H_MIN_SIZE
     msg = _watch_message("COHR", r, "فريم 4 ساعات")
-    assert "الشموع" not in msg
-    print("✅ (1هـ) جاب 0.32$ على 4 ساعات = ينبه، والرسالة بدون الشموع:")
+    assert ("الشموع" in msg) == WATCH_SHOW_CANDLES
+    print("✅ (1هـ) جاب 0.32$ على 4 ساعات = ينبه:")
     print(msg)
 
 
@@ -3775,6 +3924,9 @@ def main():
     if "--pd4htest" in sys.argv:
         pd4h_self_test()
         return
+    if "--pdh1htest" in sys.argv:
+        pdh1h_self_test()
+        return
     if "--smttest" in sys.argv:
         smt_self_test()
         return
@@ -3801,13 +3953,17 @@ def main():
                          + "تنبيه واحد لكل سهم بالأسبوع)")
         if ENABLE_PD4H:
             pw4h_txt += f" + سحب دعم/مقاومة اليوم السابق 4 ساعات مع القاما ({', '.join(PD4H_SYMBOLS)})"
+        if ENABLE_PDH1H or ENABLE_PDL1H:
+            pw4h_txt += f" + سحب دعم/مقاومة اليوم السابق فريم ساعة ({len(PD4H_SYMBOLS)} أسهم)"
         if ENABLE_SMT:
             pw4h_txt += f" + اتجاه السوق (ناسداك مقابل سباكس، فريم {SMT_FRAME_MIN} دقيقة)"
         if ENABLE_IFVG and (ENABLE_IFVG_1H or ENABLE_IFVG_4H):
             fr = [n for on, n in ((ENABLE_IFVG_1H, "ساعة"), (ENABLE_IFVG_4H, "4 ساعات")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
-        if ENABLE_WATCH_IFVG and (WATCH_IFVG_1H or WATCH_IFVG_4H):
-            fr = [n for on, n in ((WATCH_IFVG_1H, "ساعة"), (WATCH_IFVG_4H, "4 ساعات")) if on]
+        if ENABLE_WATCH_IFVG and (WATCH_IFVG_1H or WATCH_IFVG_1H_24H or WATCH_IFVG_4H or WATCH_IFVG_4H_EXT):
+            fr = [n for on, n in ((WATCH_IFVG_1H, "ساعة ممدد"), (WATCH_IFVG_1H_24H, "ساعة 24 ساعة"),
+                                  (WATCH_IFVG_4H, "4 ساعات 24 ساعة"),
+                                  (WATCH_IFVG_4H_EXT, "4 ساعات ممدد")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG قائمة المراقبة فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
         send_telegram("🧪 رسالة اختبار - بوت الشورت اشتغل\n"
                       "الأقسام: " + ("نزول الشورت المتاح 90% + " if ENABLE_BORROW_DROP else "") + "خوارزميات التقطيع"
@@ -3839,9 +3995,10 @@ def main():
         discover_groups()
 
         # (1ك-2) سحب سيولة دعم ومقاومة الأسبوع السابق - فريم 4 ساعات - كل 5 دقايق وقت السوق
-        if (ENABLE_PWL_4H or ENABLE_PWH_4H or ENABLE_WKOPT or ENABLE_PD4H) and (once or us_market_open()) \
-                and time.time() - pwl_last >= PWL_EVERY_MIN * 60:
-            scan_pwl_4h(list(dict.fromkeys(list(WATCH_SYMBOLS) + (PD4H_SYMBOLS if ENABLE_PD4H else []))),
+        if (ENABLE_PWL_4H or ENABLE_PWH_4H or ENABLE_WKOPT or ENABLE_PD4H or ENABLE_PDH1H or ENABLE_PDL1H) \
+                and (once or us_market_open()) and time.time() - pwl_last >= PWL_EVERY_MIN * 60:
+            scan_pwl_4h(list(dict.fromkeys(list(WATCH_SYMBOLS)
+                                           + (PD4H_SYMBOLS if ENABLE_PD4H or ENABLE_PDH1H or ENABLE_PDL1H else []))),
                         gap_sent)
             pwl_last = time.time()
 
@@ -3854,16 +4011,19 @@ def main():
                 ifvg_last = slot or now_ny
 
         # (1هـ) الإنفيرجن IFVG - قائمة المراقبة (من gap_scanner) - بعد إغلاق كل ساعة بدقيقة
-        #   ساعة: الجلسة الممتدة | 4 ساعات: 24 ساعة بعد إغلاق كل شمعة 4 ساعات
-        if ENABLE_WATCH_IFVG and (WATCH_IFVG_1H or WATCH_IFVG_4H):
+        #   ساعة: الممددة + 24 ساعة | 4 ساعات: الممددة + 24 ساعة بعد إغلاق كل شمعة 4 ساعات
+        if ENABLE_WATCH_IFVG and (WATCH_IFVG_1H or WATCH_IFVG_1H_24H or WATCH_IFVG_4H or WATCH_IFVG_4H_EXT):
             now_ny = pd.Timestamp.now(tz=NY)
             slot = ifvg_scan_due(now_ny, watch_last)
             if once or slot is not None:
                 day = us_market_open(now_ny, overnight=False)
                 do_4h = watch_4h_due(now_ny) and (day or (night_4h() and us_market_open(now_ny, overnight=True)))
-                if once or day or do_4h:
+                do_1h24 = night_4h() and us_market_open(now_ny, overnight=True)
+                do_4h_ext = watch_4h_due(now_ny) and day
+                if once or day or do_4h or do_1h24:
                     scan_watch_ifvg(list(WATCH_SYMBOLS), gap_sent, now_ny,
-                                    do_1h=once or day, do_4h=once or do_4h)
+                                    do_1h=once or day, do_4h=once or do_4h, do_1h24=once or do_1h24,
+                                    do_4h_ext=once or do_4h_ext)
                 watch_last = slot or now_ny
 
         # (4ب) التجزئة العكسية - الجديد كل يوم، وقائمة كل جمعة

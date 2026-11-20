@@ -72,6 +72,11 @@
     - العقد: أكثر من 10 أيام، حجم تداول فوق 500، عقود مفتوحة فوق 1000، دلتا فوق 0.1200 + قاما العقد
     - لو ما لقى عقد بالشروط ينبه بدونه | المؤشرات (سباكس) تنبيه بدون عقد | ENABLE_WKOPT = False يطفيه
 
+(14) اتجاه السوق المتوقع - ناسداك مقابل سباكس على قمة وقاع اليوم السابق (فريم 15 دقيقة)
+    - 🔴 هابط: ناسداك سحب قمة اليوم السابق وقفل تحتها، وسباكس ما سحب قمته
+    - 🟢 صاعد: ناسداك سحب قاع اليوم السابق وقفل فوقه، وسباكس ما سحب قاعه
+    - التنبيه: $SPX | $NDX ← الاتجاه ← تمركز القاما للمؤشرين | ENABLE_SMT = False يطفيه
+
 التشغيل:
   pip install yfinance pandas requests lxml
   python short_bot.py               # يشتغل باستمرار
@@ -82,6 +87,7 @@
   python short_bot.py --frimontest  # يجرب سحب الجمعة/الاثنين (بدون نت)
   python short_bot.py --wkopttest   # يجرب اختيار العقد للسحب الأسبوعي (بدون نت)
   python short_bot.py --ifvgtest    # يجرب الإنفيرجن (بدون نت)
+  python short_bot.py --smttest     # يجرب اتجاه السوق ناسداك/سباكس (بدون نت)
 """
 
 import gc
@@ -210,6 +216,21 @@ ENABLE_PD4H = True     # True = شغال | False = مطفي
 PD4H_SYMBOLS = ["TSLA", "MSFT", "AAPL", "AMD", "META", "NVDA", "GOOGL", "AMZN", "MU"]   # أسهم القسم (لحالها)
 PD4H_CHECK_LINE = "🔎 حلل السهم بنفسك وحدد الاتجاه"
 PD4H_WICK_ONLY = False # False = الإغلاق بس يرجع فوق الدعم / تحت المقاومة | True = لازم الافتتاح بعد بجهة المستوى
+
+# ---- (14) اتجاه السوق المتوقع: ناسداك مقابل سباكس على قمة وقاع اليوم السابق ----
+#   🔴 هابط: ناسداك سحب قمة اليوم السابق (ذيل فوقها) وقفلت الشمعة تحتها، وسباكس ما وصل قمة يومه السابق
+#   🟢 صاعد: ناسداك سحب قاع اليوم السابق (ذيل تحته) وقفلت الشمعة فوقه، وسباكس ما وصل قاع يومه السابق
+#   التنبيه: الرموز ← الاتجاه المتوقع ← تمركز القاما للمؤشرين (بدون شرح السحب) | لو ما تحقق الشرط ما فيه تنبيه
+#   الجلسة الرسمية 9:30 - 4 نيويورك، تنبيه واحد باليوم لكل اتجاه
+ENABLE_SMT = True                # True = شغال | False = مطفي
+SMT_FRAME_MIN = 15               # فريم شمعة الإغلاق: 15 = ربع ساعة | 60 = ساعة | 240 = 4 ساعات
+SMT_EVERY_MIN = 2                # كل كم دقيقة يفحص
+SMT_MAX_ALERT_DELAY_MIN = 30     # ما ينبه على شمعة قفلت من أكثر من كذا دقيقة
+SMT_NDX, SMT_SPX = "^NDX", "^GSPC"   # بيانات الأسعار من ياهو
+# القاما: (الاسم، رمز عقود المؤشر في ياهو، صندوق احتياطي لو عقود المؤشر ما جات)
+SMT_GAMMA = (("سباكس", "SPX", "^SPX", "SPY"), ("ناسداك", "NDX", "^NDX", "QQQ"))
+SMT_SENT_FILE = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "smt_sent.txt")
+SMT_TEST_ID = "1"                # رسالة تجريبية مرة وحدة بعد الرفع — غيّر الرقم لو تبي وحدة ثانية
 
 # ---- (1) الإنفيرجن IFVG - فريم ساعة و4 ساعات - قائمة المراقبة (WATCH_SYMBOLS) ----
 #   نفس نموذج gap_scanner: ثلاث شموع بين ذيل الأولى والثالثة جاب، الثانية تغطي الجاب كامل،
@@ -654,8 +675,9 @@ def _send_photo_one(chat_id, png, caption=None):
         return False
 
 
-def send_telegram(text, kind=None, sym=None, photo=None):
-    text = "للمتابعة\n" + text
+def send_telegram(text, kind=None, sym=None, photo=None, head=True):
+    if head:                                       # head=False = بدون سطر "للمتابعة" (الرموز أول سطر)
+        text = "للمتابعة\n" + text
     if sym and SYMBOL_FIRST:                       # الرمز أول سطر بالرسالة (وينشال سطر "السهم:" المكرر)
         text = f"${sym}\n" + "\n".join(ln for ln in text.split("\n") if ln.strip() != f"السهم: ${sym}")
     if sym and SHOW_SECTOR:
@@ -1692,6 +1714,199 @@ def pd4h_self_test():
     assert check_pwl_1h(c4h, 98.0, now.normalize()) is None
     print("✅ (13) قمة أمس 102 انسحبت (102.6) والإغلاق تحتها، والليلي ما دخل")
     print(_pd4h_message("TEST", "high", 102.0, r, lv, prev_week_ext_levels(df, _week_start(now))))
+
+
+# ================== (14) اتجاه السوق المتوقع: ناسداك مقابل سباكس على قمة وقاع اليوم السابق ==================
+_SMT_SESSION = (9 * 60 + 30, 16 * 60)       # المؤشرات: الجلسة الرسمية بس
+
+
+def smt_levels(df, now):
+    """(قمة اليوم السابق، قاعه، شموع اليوم المقفلة بفريم SMT_FRAME_MIN) أو None."""
+    df = to_ny(df)[OHLC].between_time("09:30", "15:59")
+    day0 = now.normalize()
+    prev = df[df.index < day0]
+    if prev.empty:
+        return None
+    p = prev[prev.index >= prev.index[-1].normalize()]          # آخر يوم تداول قبل اليوم
+    c = only_closed(to_frame(df, SMT_FRAME_MIN, session=_SMT_SESSION), df.index.max(), now)
+    return float(p["High"].max()), float(p["Low"].min()), c[c.index >= day0]
+
+
+def smt_check(ndx_df, spx_df, now):
+    """آخر شمعة مقفلة لناسداك اليوم:
+    هابط = ذيلها فوق قمة اليوم السابق وإغلاقها تحتها، وسباكس (من الافتتاح لين نفس الشمعة) ما وصل قمته السابقة.
+    صاعد = ذيلها تحت قاع اليوم السابق وإغلاقها فوقه، وسباكس ما وصل قاعه السابق.
+    يرجع {"side": "bear"/"bull", ...} أو None."""
+    a, b = smt_levels(ndx_df, now), smt_levels(spx_df, now)
+    if not a or not b:
+        return None
+    (n_pdh, n_pdl, nc), (s_pdh, s_pdl, sc) = a, b
+    if nc.empty or sc.empty:
+        return None
+    last = nc.iloc[-1]
+    s_upto = sc[sc.index <= nc.index[-1]]
+    if s_upto.empty or s_upto.index[-1] != nc.index[-1]:     # لازم سباكس عنده نفس الشمعة
+        return None
+    h, l, cl = float(last["High"]), float(last["Low"]), float(last["Close"])
+    bear = h > n_pdh and cl < n_pdh and float(s_upto["High"].max()) <= s_pdh
+    bull = l < n_pdl and cl > n_pdl and float(s_upto["Low"].min()) >= s_pdl
+    if bear == bull:                                          # ما فيه شرط، أو الاثنين بنفس الشمعة
+        return None
+    return {"side": "bear" if bear else "bull", "start": nc.index[-1], "end": last["end"],
+            "ndx": cl, "spx": float(s_upto["Close"].iloc[-1])}
+
+
+def _smt_etf_spot(sym):
+    import yfinance as yf
+    with _YF_LOCK:
+        h = yf.Ticker(sym).history(period="5d", interval="1d")
+    return float(h["Close"].iloc[-1]) if not h.empty else None
+
+
+def smt_gamma_text(name, code, opt_sym, etf, spot):
+    """تمركز القاما للمؤشر من عقوده، ولو ما جات يستخدم الصندوق (SPY / QQQ)."""
+    src, g = f"{code}", ""
+    try:
+        g = gamma_block(opt_sym, spot)
+    except Exception as e:
+        log(f"اتجاه السوق: قاما {opt_sym}: {e}")
+    if not g and etf:
+        try:
+            etf_spot = _smt_etf_spot(etf)
+            g = gamma_block(etf, etf_spot) if etf_spot else ""
+            src = f"{code} من عقود {etf}"
+        except Exception as e:
+            log(f"اتجاه السوق: قاما {etf}: {e}")
+    if not g:
+        return f"🧲 قاما {name} ({code}): ما فيه بيانات الحين"
+    lines = g.split("\n")
+    lines[0] = lines[0].replace("🧲 تمركز القاما", f"🧲 قاما {name} ({src})")
+    return "\n".join(lines)
+
+
+def smt_message(r):
+    bear = r["side"] == "bear"
+    t = pd.Timestamp(r["end"]).tz_convert(LOCAL_TZ)
+    spots = {"SPX": r["spx"], "NDX": r["ndx"]}
+    parts = ["$SPX | $NDX",
+             ("📉 اتجاه السوق المتوقع: هابط 🔴" if bear else "📈 اتجاه السوق المتوقع: صاعد 🟢"),
+             f"⏰ {t:%Y-%m-%d %H:%M} (توقيتك)"]
+    for name, code, opt_sym, etf in SMT_GAMMA:
+        parts += ["", smt_gamma_text(name, code, opt_sym, etf, spots[code])]
+    parts += ["", "⚠️ تحليل فني — ليست توصية بيع أو شراء."]
+    return "\n".join(parts)
+
+
+def smt_market_open(now=None):
+    now = now or pd.Timestamp.now(tz=NY)
+    m = now.hour * 60 + now.minute
+    return now.weekday() < 5 and _SMT_SESSION[0] + SMT_FRAME_MIN <= m <= _SMT_SESSION[1] + 20
+
+
+def scan_smt(sent, now=None):
+    now = now or pd.Timestamp.now(tz=NY)
+    data = dict(download_batches([SMT_NDX, SMT_SPX], 2, period="5d",
+                                 interval=f"{GAP_BASE_MIN}m", prepost=False))
+    if SMT_NDX not in data or SMT_SPX not in data:
+        log("اتجاه السوق: ما جات بيانات ناسداك/سباكس من ياهو")
+        return 0
+    r = smt_check(data[SMT_NDX], data[SMT_SPX], now)
+    if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > SMT_MAX_ALERT_DELAY_MIN:
+        return 0
+    key = f"SMT-{r['side']}-{now:%Y%m%d}"            # تنبيه واحد باليوم لكل اتجاه
+    if key in sent:
+        return 0
+    sent.add(key)
+    _append_line(SMT_SENT_FILE, key)
+    send_telegram(smt_message(r), kind="smt", head=False)
+    log(f"[{datetime.now():%H:%M}] اتجاه السوق: تنبيه {'هابط' if r['side'] == 'bear' else 'صاعد'}")
+    return 1
+
+
+def smt_send_test_once():
+    """رسالة تجريبية مرة وحدة (الاتجاه وهمي، القاما حقيقية)."""
+    marker = os.path.join(os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "."), "smt_test_sent.txt")
+    try:
+        with open(marker, encoding="utf-8") as f:
+            if f.read().strip() == SMT_TEST_ID:
+                return
+    except Exception:
+        pass
+    spots = {}
+    for code, sym in (("spx", SMT_SPX), ("ndx", SMT_NDX)):
+        try:
+            spots[code] = _smt_etf_spot(sym)
+        except Exception as e:
+            log(f"اتجاه السوق: رسالة التجربة: سعر {sym}: {e}")
+    r = {"side": "bear", "end": pd.Timestamp.now(tz=NY), "spx": spots.get("spx"), "ndx": spots.get("ndx")}
+    send_telegram("🧪 رسالة تجريبية - مو تنبيه حقيقي (الاتجاه وهمي، القاما حقيقية)\n\n"
+                  + smt_message(r), kind="smt", head=False)
+    try:
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write(SMT_TEST_ID)
+    except Exception as e:
+        log(f"اتجاه السوق: ما قدرت أحفظ علامة الرسالة التجريبية: {e}")
+
+
+def smt_run_forever():
+    smt_send_test_once()
+    sent = _load_set(SMT_SENT_FILE)
+    log(f"اتجاه السوق (ناسداك مقابل سباكس، اليوم السابق): بدأ — فريم {SMT_FRAME_MIN} دقيقة، كل {SMT_EVERY_MIN} دقيقة")
+    while True:
+        try:
+            if smt_market_open():
+                scan_smt(sent)
+        except Exception as e:
+            log(f"اتجاه السوق: خطأ {e}")
+        time.sleep(SMT_EVERY_MIN * 60)
+
+
+def smt_self_test():
+    """python short_bot.py --smttest — يجرب (14) بدون نت."""
+    global gamma_block
+    ny = ZoneInfo(NY)
+    idx = pd.date_range("2026-11-18 09:30", "2026-11-19 15:45", freq="15min", tz=ny)
+    idx = idx[(idx.hour * 60 + idx.minute >= 570) & (idx.hour * 60 + idx.minute < 960)]
+
+    def mk(base):
+        return pd.DataFrame({"Open": base, "High": base + 5, "Low": base - 5, "Close": base}, index=idx)
+
+    ndx, spx = mk(21000.0), mk(6800.0)
+    # أمس: قمة ناسداك 21050 وقاعه 20950 | سباكس 6820 و 6780
+    ndx.loc[pd.Timestamp("2026-11-18 11:00", tz=ny), ["High", "Low"]] = [21050, 20950]
+    spx.loc[pd.Timestamp("2026-11-18 11:00", tz=ny), ["High", "Low"]] = [6820, 6780]
+    k = pd.Timestamp("2026-11-19 10:30", tz=ny)
+    now = pd.Timestamp("2026-11-19 10:46", tz=ny)
+    cut = lambda d: d[d.index <= k]
+    saved = gamma_block
+    gamma_block = lambda t, s: f"🧲 تمركز القاما (أقرب 4 انتهاء، لين 12-19):\nجدار الكول: {round(s, -1):g}"
+    try:
+        # 🔴 ناسداك سحب قمة أمس وقفل تحتها، وسباكس ما وصل قمته
+        n1 = ndx.copy(); n1.loc[k, ["High", "Close"]] = [21060, 21010]
+        r = smt_check(cut(n1), cut(spx), now)
+        assert r and r["side"] == "bear", r
+        msg = smt_message(r)
+        assert msg.startswith("$SPX | $NDX") and "هابط" in msg and "سحب" not in msg
+        print("✅ هابط: ناسداك سحب قمة أمس وقفل تحتها، وسباكس ما سحب\n" + msg + "\n")
+        # سباكس كمان سحب قمته = ما فيه تنبيه
+        s1 = spx.copy(); s1.loc[k, "High"] = 6825
+        assert smt_check(cut(n1), cut(s1), now) is None
+        print("✅ سباكس سحب نفس القمة = ما فيه تنبيه")
+        # ناسداك قفل فوق القمة (اختراق مو سحب) = ما فيه تنبيه
+        n2 = ndx.copy(); n2.loc[k, ["High", "Close"]] = [21060, 21055]
+        assert smt_check(cut(n2), cut(spx), now) is None
+        print("✅ ناسداك قفل فوق القمة = ما فيه تنبيه")
+        # 🟢 ناسداك سحب قاع أمس وقفل فوقه، وسباكس ما وصل قاعه
+        n3 = ndx.copy(); n3.loc[k, ["Low", "Close"]] = [20940, 20990]
+        r = smt_check(cut(n3), cut(spx), now)
+        assert r and r["side"] == "bull", r
+        print("✅ صاعد: ناسداك سحب قاع أمس وقفل فوقه، وسباكس ما سحب")
+        # ما صار شي = ما فيه تنبيه
+        assert smt_check(cut(ndx), cut(spx), now) is None
+        print("✅ بدون سحب = ما فيه تنبيه")
+        print("SMT TEST OK")
+    finally:
+        gamma_block = saved
 
 
 # ================== (1) الإنفيرجن IFVG - فريم ساعة و4 ساعات ==================
@@ -3560,6 +3775,9 @@ def main():
     if "--pd4htest" in sys.argv:
         pd4h_self_test()
         return
+    if "--smttest" in sys.argv:
+        smt_self_test()
+        return
     if "--frimontest" in sys.argv:
         frimon_self_test()
         return
@@ -3583,6 +3801,8 @@ def main():
                          + "تنبيه واحد لكل سهم بالأسبوع)")
         if ENABLE_PD4H:
             pw4h_txt += f" + سحب دعم/مقاومة اليوم السابق 4 ساعات مع القاما ({', '.join(PD4H_SYMBOLS)})"
+        if ENABLE_SMT:
+            pw4h_txt += f" + اتجاه السوق (ناسداك مقابل سباكس، فريم {SMT_FRAME_MIN} دقيقة)"
         if ENABLE_IFVG and (ENABLE_IFVG_1H or ENABLE_IFVG_4H):
             fr = [n for on, n in ((ENABLE_IFVG_1H, "ساعة"), (ENABLE_IFVG_4H, "4 ساعات")) if on]
             pw4h_txt += f" + الإنفيرجن IFVG فريم {' و'.join(fr)} ({len(WATCH_SYMBOLS)} رمز)"
@@ -3600,6 +3820,8 @@ def main():
     if not once:
         pd4h_send_test_once()
         start_algo_thread()
+        if ENABLE_SMT:           # (14) اتجاه السوق: ناسداك مقابل سباكس على اليوم السابق
+            threading.Thread(target=smt_run_forever, daemon=True, name="smt").start()
         if ENABLE_FRIMON:        # (11) سحب قمة الجمعة/الاثنين + دعم الأسبوع السابق → كول
             threading.Thread(target=frimon_run_forever, daemon=True, name="frimon").start()
         if ENABLE_BORROW_DROP:   # نزول الشورت المتاح أكثر من 90%

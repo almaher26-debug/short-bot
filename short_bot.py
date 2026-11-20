@@ -278,6 +278,12 @@ WATCH_CHECK_LINE = "حلل بنفسك وتأكد من الاتجاه"   # سطر
 IFVG_GAMMA = True                # يضيف تمركز القاما لتنبيهات الإنفيرجن (القسمين) | False = بدون
 GAP_4H_24H = True               # فريم 4 ساعات: True = 24 ساعة (يحتاج مفاتيح ألباكا) | False = 4 الفجر - 8 بالليل
 
+# ---- فلتر اتجاه السوق: من تنبيه القسم (14) ناسداك مقابل سباكس ----
+#   لو (14) نبه اليوم 🔴 هابط ← ما يرسل كول (سحب الدعم) باقي اليوم
+#   لو (14) نبه اليوم 🟢 صاعد ← ما يرسل بوت (سحب المقاومة) باقي اليوم
+#   ما نبه (14) اليوم ← كول وبوت عادي | يشمل: (12) الأسبوعي مع العقد، (13) اليوم السابق 4 ساعات، (15) فريم ساعة
+MARKET_FILTER = True             # True = شغال | False = كول وبوت دايماً
+
 # ---- (12) سحب السيولة الأسبوعي (دعم ← كول | مقاومة ← بوت) + العقد - الأسهم من 100$ إلى 350$ ----
 #   نفس شمعة السحب في (1ك-2)، بس الأسهم اللي سعرها داخل النطاق يجيها تنبيه واحد بالأسبوع (أول سحب، دعم أو مقاومة)
 #   ومعه عقد بالشروط تحت. الأسهم برا النطاق تكمل على (1ك-2) مثل قبل.
@@ -1533,6 +1539,8 @@ def scan_pwl_4h(symbols, sent):
             spot = float(df["Close"].iloc[-1])
             wk_key = f"{t}-wkopt-{wk0:%Y%m%d}"     # (12) تنبيه واحد لكل سهم بالأسبوع (لو WKOPT_REALERT = False)
             for side, tag, fn, old_on in checks4h:
+                if market_blocks(side, now):            # فلتر اتجاه السوق (14)
+                    continue
                 # WKOPT_REALERT: كل شمعة سحب جديدة (إعادة اختبار بنفس السلوك) = تنبيه جديد
                 side_pref = f"{t}-wkopt-{side}-{wk0:%Y%m%d}-"
                 lvl, lvl_day = lv4[side]
@@ -1584,6 +1592,29 @@ def scan_pwl_4h(symbols, sent):
     free_memory()
     if hits:
         log(f"[{datetime.now():%H:%M}] سحب دعم/مقاومة الأسبوع السابق (4 ساعات): {hits} تنبيه")
+
+
+# ================== فلتر اتجاه السوق (من تنبيه القسم 14) ==================
+_SMT_TODAY = {}                  # تاريخ اليوم (نيويورك) YYYYMMDD -> "bear"/"bull" (آخر تنبيه للقسم 14)
+
+
+def _smt_today_load():
+    """بعد إعادة التشغيل: يرجع اتجاه اليوم من ملف تنبيهات (14). لو فيه الاثنين ما يعرف الأخير فيتركه."""
+    for k in _load_set(SMT_SENT_FILE):
+        try:
+            _, side, day = k.split("-")
+        except ValueError:
+            continue
+        _SMT_TODAY[day] = None if _SMT_TODAY.get(day, side) != side else side
+
+
+def market_blocks(side, now=None):
+    """True = لا ترسل: "low" (كول) و(14) قال هابط اليوم، أو "high" (بوت) و(14) قال صاعد اليوم."""
+    if not MARKET_FILTER:
+        return False
+    now = now or pd.Timestamp.now(tz=NY)
+    d = _SMT_TODAY.get(f"{pd.Timestamp(now).tz_convert(NY):%Y%m%d}")
+    return (side == "low" and d == "bear") or (side == "high" and d == "bull")
 
 
 # ================== (13) سحب سيولة دعم ومقاومة اليوم السابق - فريم 4 ساعات ==================
@@ -1656,6 +1687,8 @@ def pd4h_check(t, df, now, sent):
     c4h = only_closed(to_frame(df, 240, overnight=False), df.index.max(), now)
     hits = 0
     for side, fn in (("low", sweep_check("low", PD4H_WICK_ONLY)), ("high", sweep_check("high", PD4H_WICK_ONLY))):
+        if market_blocks(side, now):                     # فلتر اتجاه السوق (14)
+            continue
         lvl = pd_lv[side][0]
         r = fn(c4h, lvl, day0, wick_only=PD4H_WICK_ONLY)       # شموع اليوم بس
         if not r or (now - pd.Timestamp(r["end"])).total_seconds() / 60 > PWL_MAX_ALERT_DELAY_MIN:
@@ -1715,7 +1748,7 @@ def pdh1h_check(t, df, now, sent):
     c1h = only_closed(to_frame(df, 60, overnight=False), df.index.max(), now)
     hits = 0
     for side, on, fn in (("high", ENABLE_PDH1H, check_pwh_1h), ("low", ENABLE_PDL1H, check_pwl_1h)):
-        if not on:
+        if not on or market_blocks(side, now):           # فلتر اتجاه السوق (14)
             continue
         lvl, lvl_day = lv[side]
         r = fn(c1h, lvl, day0)                           # آخر شمعة: ذيل برا المستوى وإغلاق داخله
@@ -1777,6 +1810,15 @@ def pdh1h_self_test():
         dn = su.copy(); dn.loc[pd.Timestamp("2026-11-20 10:45", tz=ny), "Close"] = 283.5
         assert pdh1h_check("GOOGL", dn, now, set()) == 0
         print("✅ دعم بس الإغلاق تحت إغلاق أمس (مو صاعد) = ما فيه تنبيه")
+        _SMT_TODAY["20261120"] = "bear"
+        assert pdh1h_check("GOOGL", su, now, set()) == 0
+        print("✅ (14) قال هابط اليوم ← تنبيه الدعم (صاعد) ما يرسل")
+        assert pdh1h_check("GOOGL", df, now, set()) == 1
+        print("✅ (14) قال هابط اليوم ← تنبيه المقاومة (هابط) يرسل")
+        _SMT_TODAY["20261120"] = "bull"
+        assert pdh1h_check("GOOGL", df, now, set()) == 0 and pdh1h_check("GOOGL", su, now, set()) == 1
+        print("✅ (14) قال صاعد اليوم ← المقاومة ما ترسل والدعم يرسل")
+        _SMT_TODAY.clear()
         print("PDH1H TEST OK")
     finally:
         with_gamma, send_telegram = saved
@@ -1950,6 +1992,7 @@ def scan_smt(sent, now=None):
         return 0
     sent.add(key)
     _append_line(SMT_SENT_FILE, key)
+    _SMT_TODAY[f"{now:%Y%m%d}"] = r["side"]           # فلتر اتجاه السوق يمشي على هذا باقي اليوم
     send_telegram(smt_message(r), kind="smt", head=False)
     log(f"[{datetime.now():%H:%M}] اتجاه السوق: تنبيه {'هابط' if r['side'] == 'bear' else 'صاعد'}")
     return 1
@@ -3977,6 +4020,7 @@ def main():
         pd4h_send_test_once()
         start_algo_thread()
         if ENABLE_SMT:           # (14) اتجاه السوق: ناسداك مقابل سباكس على اليوم السابق
+            _smt_today_load()
             threading.Thread(target=smt_run_forever, daemon=True, name="smt").start()
         if ENABLE_FRIMON:        # (11) سحب قمة الجمعة/الاثنين + دعم الأسبوع السابق → كول
             threading.Thread(target=frimon_run_forever, daemon=True, name="frimon").start()
